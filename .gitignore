@@ -43,8 +43,8 @@ ExportedObj/
 unity-create.log
 *.log
 
-# Store / pazarlama görselleri — bu repoya ASLA girmez.
-# Kalıcı yer: private Eren-Ozcan/pictures reposunda pictures/mind-the-crack/
+# Store / marketing assets — NEVER committed to this repo.
+# Permanent home: pictures/mind-the-crack/ in the private Eren-Ozcan/pictures repo
 docs/store-assets-originals/
 
 # Python
