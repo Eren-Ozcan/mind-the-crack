@@ -1,72 +1,74 @@
-# Mind the Crack — Proje Notları
+# Mind the Crack — Project Notes
 
-Hypercasual zamanlama/arcade oyunu. Kaldırımda müziğin vuruşuyla yürüyen
-karakteri, taş birleşim çizgilerine bastırmadan olabildiğince uzağa
-götürmek. Unity 6, Android (v1.0'da iOS yok).
+Hypercasual timing/arcade game. Walk a character along the sidewalk to the
+beat of the music and get as far as possible without stepping on the lines
+between the slabs. Unity 6, Android (no iOS in v1.0).
 
-## Dokümanlar — önce bunları oku
+## Documents — read these first
 
-| Dosya | İçerik |
+| File | Contents |
 | --- | --- |
-| `docs/game-design.md` | Oyun tasarımı, tüm mekanik kararları |
-| `docs/economy.md` | **Ekonomi sayılarının tek doğru kaynağı** |
-| `docs/onboarding.md` | İlk 60 saniye, saniye saniye |
-| `docs/test-plan.md` | 5 katmanlı test planı, cihaz matrisi, kapılar |
-| `docs/roadmap.md` | Fazlar, takvim, verilen kararlar |
-| `docs/market-research.md` | Pazar verisi, rakipler, benchmark'lar |
-| `tools/economy_sim.py` | Ekonomi simülasyonu — sayı değişince çalıştır |
+| `docs/game-design.md` | Game design, all mechanic decisions |
+| `docs/economy.md` | **Single source of truth for economy numbers** |
+| `docs/onboarding.md` | The first 60 seconds, second by second |
+| `docs/test-plan.md` | 5-layer test plan, device matrix, gates |
+| `docs/roadmap.md` | Phases, schedule, decisions made |
+| `docs/market-research.md` | Market data, competitors, benchmarks |
+| `tools/economy_sim.py` | Economy simulation — run it when a number changes |
 
-## Değişmez kurallar
+## Invariant rules
 
-### 1. Yükseltmeler beceriye dokunmaz
+### 1. Upgrades never touch skill
 
-Hiçbir yükseltme, satın alma veya ödül şunları değiştiremez: zamanlama
-penceresi (±60 / ±120 ms), Perfect için taş ortası toleransı (%40), BPM
-rampası, adım mesafeleri (1,0 / 1,5 / 2,5), üretim zorluk eğrisi.
+No upgrade, purchase or reward may change: the timing window (±60 / ±120
+ms), the slab centre tolerance for Perfect (40%), the BPM ramp, step
+distances (1.0 / 1.5 / 2.5), the generation difficulty curve.
 
-Yükseltmeler yalnızca şunlara dokunur: para çarpanı, mıknatıs yarıçapı,
-başlangıç avansı, ekstra tökezleme hakkı, çevrimdışı gelir, yonca.
+Upgrades only touch: coin multiplier, magnet radius, head start, extra
+stumble, offline income, clover.
 
-Bu kural `docs/game-design.md` §8.1'de tablo, `docs/test-plan.md` §2'de
-otomatik test. Doküman yeterli değil — testi de korunmalı.
+This rule is a table in `docs/game-design.md` §8.1 and an automated test in
+`docs/test-plan.md` §2. The document is not enough — the test must be kept
+too.
 
-### 2. Ekonomi sayıları kodda sabit yazılmaz
+### 2. Economy numbers are never hardcoded
 
-Tüm ekonomi değerleri `docs/economy.md`'den gelir ve Unity'ye
-ScriptableObject olarak aktarılır. Sayı değiştirilecekse önce
-`python tools/economy_sim.py` çalıştırılır; dört hedef kontrolü de OK
-vermeden değer kabul edilmez.
+All economy values come from `docs/economy.md` and are exported to Unity as
+a ScriptableObject. Before changing a number, run
+`python tools/economy_sim.py` first; a value is not accepted until all four
+target checks report OK.
 
-### 3. Zaman kaynağı dspTime
+### 3. The time source is dspTime
 
-Ritimle ilgili hiçbir yerde `Time.time` / `Time.deltaTime` kullanılmaz.
-`AudioSettings.dspTime` + `AudioSource.PlayScheduled`. Unity UI Button
-ritim girdisi için kullanılmaz (callback basışta değil bırakışta gelir).
+`Time.time` / `Time.deltaTime` are never used anywhere rhythm-related. Use
+`AudioSettings.dspTime` + `AudioSource.PlayScheduled`. Unity UI Button is
+never used for rhythm input (its callback fires on release, not on press).
 
-### 4. Store görselleri bu repoya girmez
+### 4. Store assets never enter this repo
 
-Yerel: `docs/store-assets-originals/` (gitignore'lu). Kalıcı: private
-`Eren-Ozcan/pictures` reposunda `pictures/mind-the-crack/`.
+Local: `docs/store-assets-originals/` (gitignored). Permanent: private
+`Eren-Ozcan/pictures` repo under `pictures/mind-the-crack/`.
 
-### 5. Hesap doğrulaması
+### 5. Account verification
 
-Google/Play Console/AdMob/Firebase paneline girmeden önce aktif hesap
-doğrulanır. Beklenen hesap: `yilkgamesstudio@gmail.com`. Adresler ve
-tuzaklar: `C:\Projects\pictures\STUDIO.md`. Reklam yerleşimi eklemeden
-önce `C:\Projects\pictures\ADS_POLICY.md` okunur.
+Before opening the Google/Play Console/AdMob/Firebase consoles, verify the
+active account. Expected account: `yilkgamesstudio@gmail.com`. URLs and
+pitfalls: `C:\Projects\pictures\STUDIO.md`. Read
+`C:\Projects\pictures\ADS_POLICY.md` before adding an ad placement.
 
-## Klasör düzeni
+## Folder layout
 
 ```
-Assets/Scripts/Rhythm/     Conductor, zamanlama penceresi
-Assets/Scripts/Gameplay/   Adım, iniş değerlendirmesi, kaldırım üretimi
-Assets/Scripts/Config/     ScriptableObject ayarları
-Assets/Scripts/Debug/      Geliştirme HUD'u
-docs/                      Tasarım ve plan dokümanları
-tools/                     Python yardımcıları (ekonomi simülasyonu)
+Assets/Scripts/Rhythm/     Conductor, timing window
+Assets/Scripts/Gameplay/   Steps, landing evaluation, sidewalk generation
+Assets/Scripts/Config/     ScriptableObject settings
+Assets/Scripts/Debug/      Development HUD
+docs/                      Design and planning documents
+tools/                     Python helpers (economy simulation)
 ```
 
-## Faz durumu
+## Phase status
 
-Faz 0 (dikey dilim) — devam ediyor. Kapı kriteri: 10 kişiden ≥ 6'sı
-5 dakika elden bırakmıyor. Geçilmeden Faz 1'e başlanmaz.
+Phase 0 (vertical slice) — in progress. Gate criterion: ≥ 6 out of 10
+people do not put it down for 5 minutes. Phase 1 does not start until it is
+passed.
