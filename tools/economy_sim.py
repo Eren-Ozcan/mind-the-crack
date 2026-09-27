@@ -1,66 +1,67 @@
-"""Mind the Crack — ekonomi simulasyonu.
+"""Mind the Crack — economy simulation.
 
-Amac: yukseltme agacinin ilerleme egrisini koddan once dogrulamak.
-Hedef egri:
-  - 1. gun 3-4 yukseltme alinabilmeli
-  - 7. gun ilk tasinma (prestij) mumkun olmali
-  - 10. seviyeler prestij olmadan alinamamali
+Goal: validate the upgrade tree's progression curve before writing code.
+Target curve:
+  - 3-4 upgrades affordable on day 1
+  - first move (prestige) possible on day 7
+  - level 10 unreachable without prestige
 
-Calistir:  python tools/economy_sim.py
-Cikti: gun bazli tablo + hedef kontrolleri.
+Run:     python tools/economy_sim.py
+Output:  per-day table + target checks.
 
-Buradaki sayilar tek dogru kaynak. Unity tarafinda ScriptableObject'e bu
-degerler aktarilir; kodda sabit sayi yazilmaz.
+The numbers here are the single source of truth. On the Unity side these
+values are copied into a ScriptableObject; no numbers are hardcoded.
 """
 
 from dataclasses import dataclass, field
 
 # --------------------------------------------------------------------------
-# AYARLANABILIR SAYILAR  (dengeleme burada yapilir)
+# TUNABLE NUMBERS  (balancing happens here)
 # --------------------------------------------------------------------------
 
 MAX_LEVEL = 10
 
-# Dal bazli maliyet tabanlari. maliyet(n) = taban * 1.6^n,  n = 0..9
+# Per-branch cost bases. cost(n) = base * 1.6^n,  n = 0..9
 BRANCH_BASE = {
-    "ayakkabi": 50,      # para carpani  — ana ekonomi dali, en ucuz
-    "dayaniklilik": 70,  # baslangic avansi + ekstra tokezleme
-    "mahalle": 90,       # cevrimdisi gelir
-    "sans": 120,         # miknatis + yonca sansi (v1.1'de tam acilir)
+    "shoes": 50,         # coin multiplier — main economy branch, cheapest
+    "endurance": 70,     # head start + extra stumble
+    "neighborhood": 90,  # offline income
+    "luck": 120,         # magnet + clover chance (fully unlocked in v1.1)
 }
 COST_GROWTH = 1.6
 
-# Dal etkileri (seviye basina)
-SHOES_MULT_PER_LEVEL = 0.10        # para carpani +%10/sv  (sv10 = 2.0x)
-HEADSTART_PER_LEVEL = 12           # metre, run basinda atlanan mesafe
-MAGNET_COIN_BONUS_PER_LEVEL = 0.04  # toplama verimi +%4/sv
+# Branch effects (per level)
+SHOES_MULT_PER_LEVEL = 0.10        # coin multiplier +10%/lv  (lv10 = 2.0x)
+HEADSTART_PER_LEVEL = 12           # metres skipped at run start
+MAGNET_COIN_BONUS_PER_LEVEL = 0.04  # pickup efficiency +4%/lv
 OFFLINE_COINS_PER_HOUR_PER_LEVEL = 6
 OFFLINE_CAP_HOURS_BASE = 2.0
-OFFLINE_CAP_HOURS_PER_LEVEL = 0.4   # sv10 = 6 saat tavan
+OFFLINE_CAP_HOURS_PER_LEVEL = 0.4   # lv10 = 6 hour cap
 
-# Run ekonomisi
-COINS_PER_METER = 0.22          # kaldirimdan toplanan
-END_BONUS_PER_METER = 0.08      # run sonu bonusu
-REWARDED_DOUBLE_RATE = 0.35     # oyuncularin run sonu 2x reklamini izleme orani
+# Run economy
+COINS_PER_METER = 0.22          # collected on the sidewalk
+END_BONUS_PER_METER = 0.08      # end-of-run bonus
+REWARDED_DOUBLE_RATE = 0.35     # share of players watching the end-of-run 2x ad
 
-# Oyuncu davranisi
+# Player behaviour
 RUNS_PER_SESSION = 5
-SESSIONS_PER_DAY = {1: 2}       # 1. gun 2 oturum, sonraki gunler 3
+SESSIONS_PER_DAY = {1: 2}       # 2 sessions on day 1, 3 on later days
 DEFAULT_SESSIONS = 3
-OFFLINE_CLAIMS_PER_DAY = 2      # gunde 2 kez donup cevrimdisi geliri alir
+OFFLINE_CLAIMS_PER_DAY = 2      # returns twice a day to claim offline income
 
-# Beceri egrisi — ortalama run mesafesi (metre)
+# Skill curve — average run distance (metres)
 BASE_DISTANCE = 70
-SKILL_GROWTH = 0.18             # gun basina +%18
+SKILL_GROWTH = 0.18             # +18% per day
 DISTANCE_CAP = 650
 
-# Prestij (tasinma)
-# Kosul SADECE seviye — ayri bir mesafe grindine baglanmaz. Mesafe sarti
-# konursa oyuncu 40/40 seviyeye ulasip harcayacak yer kalmadan bekler
-# (sink kurur, para yigilir). Bkz. economy.md "Reddedilen varyantlar".
-PRESTIGE_TOTAL_LEVELS = 28      # 40 seviyenin 30'u
-PRESTIGE_MULT = 1.5             # kalici para carpani, her tasinmada carpilir
-CITY_COST_MULT = 1.90           # her yeni sehirde maliyet tabanlari x1.45
+# Prestige (moving)
+# The condition is levels ONLY — not tied to a separate distance grind. With
+# a distance requirement the player reaches 40/40 levels and waits with
+# nothing left to spend on (the sink dries up, coins pile up). See
+# economy.md "Rejected variants".
+PRESTIGE_TOTAL_LEVELS = 28      # out of 40 levels
+PRESTIGE_MULT = 1.5             # permanent coin multiplier, compounded on every move
+CITY_COST_MULT = 1.90           # cost bases multiplied by this in every new city
 
 SIM_DAYS = 30
 
@@ -68,8 +69,8 @@ SIM_DAYS = 30
 # --------------------------------------------------------------------------
 
 def cost(branch: str, level: int, city: int = 0) -> int:
-    """level = su anki seviye (0 tabanli). Bir sonraki seviyenin fiyati.
-    city = kacinci tasinma (0 = ilk sehir)."""
+    """level = current level (0-based). Returns the next level's price.
+    city = move count (0 = first city)."""
     base = BRANCH_BASE[branch] * (CITY_COST_MULT ** city)
     return round(base * (COST_GROWTH ** level))
 
@@ -89,26 +90,26 @@ class State:
 
     @property
     def coin_mult(self) -> float:
-        shoes = 1.0 + SHOES_MULT_PER_LEVEL * self.levels["ayakkabi"]
-        magnet = 1.0 + MAGNET_COIN_BONUS_PER_LEVEL * self.levels["sans"]
+        shoes = 1.0 + SHOES_MULT_PER_LEVEL * self.levels["shoes"]
+        magnet = 1.0 + MAGNET_COIN_BONUS_PER_LEVEL * self.levels["luck"]
         return shoes * magnet * self.prestige_mult
 
 
 def avg_distance(day: int, st: State) -> float:
     skill = BASE_DISTANCE * ((1 + SKILL_GROWTH) ** (day - 1))
     skill = min(skill, DISTANCE_CAP)
-    return skill + HEADSTART_PER_LEVEL * st.levels["dayaniklilik"]
+    return skill + HEADSTART_PER_LEVEL * st.levels["endurance"]
 
 
 def run_income(dist: float, st: State) -> float:
     pickup = dist * COINS_PER_METER
     end_bonus = dist * END_BONUS_PER_METER
-    end_bonus *= (1 + REWARDED_DOUBLE_RATE)   # 2x reklam izleyenlerin ortalamasi
+    end_bonus *= (1 + REWARDED_DOUBLE_RATE)   # averaged over players watching the 2x ad
     return (pickup + end_bonus) * st.coin_mult
 
 
 def offline_income(st: State) -> float:
-    lvl = st.levels["mahalle"]
+    lvl = st.levels["neighborhood"]
     if lvl == 0:
         return 0.0
     cap = OFFLINE_CAP_HOURS_BASE + OFFLINE_CAP_HOURS_PER_LEVEL * lvl
@@ -117,7 +118,7 @@ def offline_income(st: State) -> float:
 
 
 def buy_greedy(st: State) -> list:
-    """En ucuz alinabilir yukseltmeyi al, para yetmeyene kadar."""
+    """Buy the cheapest affordable upgrade until coins run out."""
     bought = []
     while True:
         options = [
@@ -160,7 +161,7 @@ def simulate():
         if ready:
             if prestige_day is None:
                 prestige_day = day
-            # Oyuncu hazir olur olmaz tasinir.
+            # The player moves as soon as they are ready.
             st.levels = {b: 0 for b in BRANCH_BASE}
             st.coins = 0.0
             st.prestige_mult *= PRESTIGE_MULT
@@ -184,55 +185,55 @@ def simulate():
 def main():
     rows, prestige_day, prestige_days, st = simulate()
 
-    print("Mind the Crack — ekonomi simulasyonu\n")
-    print(f"{'Gun':>3} {'Ort.m':>6} {'Gelir':>9} {'Bakiye':>8} "
-          f"{'Sv':>3} {'x':>5}  Alinan / olay")
+    print("Mind the Crack — economy simulation\n")
+    print(f"{'Day':>3} {'Avg.m':>6} {'Income':>9} {'Balance':>8} "
+          f"{'Lv':>3} {'x':>5}  Bought / event")
     print("-" * 88)
     for r in rows:
         tag = (', '.join(r['bought']) or '-')
         if r['prestiged']:
-            tag += f"  >>> TASINMA #{r['pcount']} (carpan {r['pmult']:.2f}x)"
+            tag += f"  >>> MOVE #{r['pcount']} (multiplier {r['pmult']:.2f}x)"
         print(f"{r['day']:>3} {r['dist']:>6.0f} "
               f"{r['income']:>9.0f} {r['coins']:>8.0f} "
               f"{r['total_levels']:>3} {r['pmult']:>5.2f}  {tag}")
 
-    print("\nMaliyet tablosu (dal / seviye):")
+    print("\nCost table (branch / level):")
     header = "       " + "".join(f"{i+1:>7}" for i in range(MAX_LEVEL))
     print(header)
     for b in BRANCH_BASE:
         line = "".join(f"{cost(b, i):>7}" for i in range(MAX_LEVEL))
         total = sum(cost(b, i) for i in range(MAX_LEVEL))
-        print(f"{b[:6]:<6}{line}   toplam {total}")
+        print(f"{b[:6]:<6}{line}   total {total}")
 
     grand = sum(sum(cost(b, i) for i in range(MAX_LEVEL)) for b in BRANCH_BASE)
-    print(f"\n40 seviyenin tamami: {grand} para")
+    print(f"\nAll 40 levels: {grand} coins")
 
-    print("\nHedef kontrolleri:")
+    print("\nTarget checks:")
     d1 = len(rows[0]["bought"])
     ok1 = 3 <= d1 <= 4
-    print(f"  [{'OK ' if ok1 else 'HAYIR'}] 1. gun 3-4 yukseltme  -> {d1}")
+    print(f"  [{'OK ' if ok1 else 'NO '}] day 1: 3-4 upgrades  -> {d1}")
 
     ok7 = prestige_day is not None and 6 <= prestige_day <= 9
-    print(f"  [{'OK ' if ok7 else 'HAYIR'}] ~7. gun prestij hazir -> "
-          f"{prestige_day if prestige_day else 'ulasilamadi'}. gun")
+    print(f"  [{'OK ' if ok7 else 'NO '}] prestige ready ~day 7 -> day "
+          f"{prestige_day if prestige_day else 'never'}")
 
     maxed = [b for b, lv in rows[6]["levels"].items() if lv >= MAX_LEVEL] \
         if len(rows) > 6 else []
     ok10 = not maxed
-    print(f"  [{'OK ' if ok10 else 'HAYIR'}] 7. gunde hicbir dal 10 degil -> "
-          f"{maxed or 'hicbiri'}")
+    print(f"  [{'OK ' if ok10 else 'NO '}] no branch at 10 on day 7 -> "
+          f"{maxed or 'none'}")
 
-    # Sink kurumasi: 40/40 seviyedeyken tasinma yoksa para yigilir.
+    # Sink dry-up: at 40/40 levels without a move, coins pile up.
     dry = [r["day"] for r in rows
            if r["total_levels"] == MAX_LEVEL * len(BRANCH_BASE)
            and not r["prestiged"]]
-    print(f"  [{'OK ' if not dry else 'HAYIR'}] sink kurumasi (40/40 iken "
-          f"tasinma yok) -> {dry or 'yok'}")
+    print(f"  [{'OK ' if not dry else 'NO '}] sink dry-up (40/40 with "
+          f"no move) -> {dry or 'none'}")
 
     gaps = [b - a for a, b in zip(prestige_days, prestige_days[1:])]
-    print(f"\nTasinma gunleri: {prestige_days}  (aralik: {gaps})")
-    print(f"{SIM_DAYS}. gun: carpan {rows[-1]['pmult']:.2f}x, "
-          f"seviye {rows[-1]['levels']}")
+    print(f"\nMove days: {prestige_days}  (gaps: {gaps})")
+    print(f"Day {SIM_DAYS}: multiplier {rows[-1]['pmult']:.2f}x, "
+          f"levels {rows[-1]['levels']}")
 
 
 if __name__ == "__main__":
