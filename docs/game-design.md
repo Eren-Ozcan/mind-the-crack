@@ -1,398 +1,412 @@
-# Mind the Crack — Oyun Tasarım Dokümanı (v2)
+# Mind the Crack — Game Design Document (v2)
 
-Bu doküman ilk taslağın üzerine kurulu. Değişen yerler **[DEĞİŞTİ]** ile
-işaretli; gerekçeler `market-research.md` ve aşağıdaki bölümlerde.
+This document builds on the first draft. Changed sections are marked
+**[CHANGED]**; the rationale is in `market-research.md` and the sections
+below.
 
-**Tek cümle:** Kaldırımda müziğin vuruşuyla yürüyen karakteri, taş birleşim
-çizgilerine bastırmadan olabildiğince uzağa götür.
+**One sentence:** Walk a character along the sidewalk to the beat of the
+music and get as far as possible without stepping on the lines between the
+slabs.
 
-**Tür etiketi (mağaza):** arcade / zamanlama. "Ritim oyunu" olarak
-etiketlenmeyecek — ritim oyunu kategorisi lisanslı müzik kataloglarının
-alanı, orada görünürlük alınamaz.
+**Genre tag (store):** arcade / timing. It will not be tagged as a "rhythm
+game" — the rhythm game category belongs to licensed music catalogues, and
+there is no visibility to be had there.
 
-**Platform:** v1.0 yalnızca Android. iOS sonraya bırakıldı (karar
-22 Eyl 2026) — Apple Developer hesabı, ATT onamı ve ayrı ses gecikmesi
-profili ayrı bir iş kalemi.
+**Platform:** v1.0 is Android only. iOS was deferred (decision of
+22 Sep 2026) — an Apple Developer account, ATT consent and a separate audio
+latency profile are a work item of their own.
 
-**İlgili dokümanlar:** `economy.md` (ekonomi sayıları — tek doğru kaynak),
-`onboarding.md` (ilk 60 saniye), `test-plan.md`, `market-research.md`,
-`roadmap.md`.
+**Related documents:** `economy.md` (economy numbers — single source of
+truth), `onboarding.md` (first 60 seconds), `test-plan.md`,
+`market-research.md`, `roadmap.md`.
 
 ---
 
-## 1. Çekirdek oynanış
+## 1. Core gameplay
 
-### 1.1 Adım modeli
+### 1.1 Step model
 
-Karakter otomatik yürür. Her müzik vuruşu bir adımdır. Oyuncu adımın
-**türünü** ve **zamanlamasını** seçer.
+The character walks automatically. Every music beat is one step. The player
+chooses the **type** and **timing** of the step.
 
-| Girdi | Hareket | Mesafe |
+| Input | Movement | Distance |
 | --- | --- | --- |
-| Hiçbir şey | Normal adım | 1,0 birim |
-| Tap | Uzun adım | 1,5 birim |
-| Yukarı swipe | Zıplama | 2,5 birim |
+| Nothing | Normal step | 1.0 units |
+| Tap | Long step | 1.5 units |
+| Swipe up | Jump | 2.5 units |
 
-### 1.2 Zamanlama penceresi **[DEĞİŞTİ — kritik]**
+### 1.2 Timing window **[CHANGED — critical]**
 
-İlk taslakta girdi zamanlaması hiçbir şeyi etkilemiyordu; oyuncu vuruşlar
-arasında istediği an dokunsa aynı sonucu alıyordu. Bu durumda oyun ritim
-oyunu değil, sadece müzikli bir oyun olur. Düzeltme: girdi vuruşa göre
-değerlendirilir.
+In the first draft input timing affected nothing; a player tapping at any
+moment between beats got the same result. That makes it a game with music,
+not a rhythm game. Fix: input is evaluated against the beat.
 
-| Sapma (vuruş anına göre) | Sonuç |
+| Offset (from the beat) | Result |
 | --- | --- |
-| ≤ ±60 ms | Perfect zamanlama |
-| ≤ ±120 ms | Geçerli |
-| > ±120 ms | Girdi yok sayılır → normal adım atılır (çoğu zaman ölüm) |
+| ≤ ±60 ms | Perfect timing |
+| ≤ ±120 ms | Valid |
+| > ±120 ms | Input ignored → a normal step is taken (usually death) |
 
-Pencereler zorluk eğrisine göre daralır: ilk 3 run'da ±200 ms, sonrasında
-yukarıdaki değerler. Değerler Unity tarafında ScriptableObject ile ayarlanır,
-kodda sabit yazılmaz — test sonrası en çok oynanacak sayılar bunlar.
+Windows tighten along the difficulty curve: ±200 ms in the first 3 runs,
+the values above afterwards. Values are set through a ScriptableObject on
+the Unity side, never hardcoded — these are the numbers that will be tuned
+most after testing.
 
-### 1.3 Perfect tanımı **[DEĞİŞTİ]**
+### 1.3 Perfect definition **[CHANGED]**
 
-Perfect = **hem** ayak taşın orta %40'ına iniyor **hem de** girdi ±60 ms
-içinde. İkisinden biri eksikse "İyi" sayılır (puan var, çarpan yok).
+Perfect = the foot lands in the middle 40% of the slab **and** the input is
+within ±60 ms. If either is missing it counts as "Good" (points, no
+multiplier).
 
-| Sonuç | Koşul | Puan |
+| Result | Condition | Points |
 | --- | --- | --- |
-| Perfect | Orta %40 + ≤60 ms | 3 × çarpan |
-| İyi | Taşın üstünde | 1 |
-| Tökezleme | Çizgiye çok yakın (çizginin ±%5'i) | 0, bir vuruş kaybı |
-| Ölüm | Ayak çizgide | Run biter |
+| Perfect | Middle 40% + ≤60 ms | 3 × multiplier |
+| Good | On the slab | 1 |
+| Stumble | Too close to the line (±5% of the line) | 0, one beat lost |
+| Death | Foot on the line | Run ends |
 
-Çarpan: ardışık Perfect sayısına göre 1× → 1,5× → 2× → 3× (5, 10, 20
-Perfect'te). Seri kırılınca 1×'e döner.
+Multiplier: 1× → 1.5× → 2× → 3× based on consecutive Perfects (at 5, 10,
+20 Perfects). Resets to 1× when the streak breaks.
 
-**Girdisiz adımın zamanlaması** (Faz 0'da verilen karar): oyuncu hiçbir şey
-yapmadığında adım vuruşun kendisi tarafından atılır, dolayısıyla zamanlaması
-tanım gereği Perfect sayılır. Sadece oyuncunun talep ettiği bir adım
-(tap/swipe) mistimed olabilir. Alternatif — girdisiz adım asla Perfect
-olamaz — öğreticinin ilk 6 saniyesini ödülsüz bırakıyor ve "hiçbir şey
-yapma" seçeneğini cezalandırıyordu. Faz 0 testinde "hiçbir şey yapmamak
-fazla güvenli hissettiriyor" geri bildirimi gelirse yeniden açılacak.
+**Timing of a step without input** (decision made in Phase 0): when the
+player does nothing, the step is taken by the beat itself, so its timing
+counts as Perfect by definition. Only a step the player asks for
+(tap/swipe) can be mistimed. The alternative — a step without input can
+never be Perfect — left the first 6 seconds of the tutorial without reward
+and punished the "do nothing" option. To be reopened if Phase 0 testing
+brings the feedback "doing nothing feels too safe".
 
-### 1.4 Önizleme
+### 1.4 Preview
 
-Sonraki 2 adımın ineceği yer ekranda gölgeyle gösterilir (ilk taslakta 1
-adımdı — 2 adım, uzun adım/zıplama kombinasyonlarının planlanabilmesi için
-gerekli). Gölge rengi: güvenli = beyaz, çizgiye denk geliyor = kırmızı.
+Where the next 2 steps will land is shown on screen with a shadow (1 step
+in the first draft — 2 steps are needed so long step/jump combinations can
+be planned). Shadow colour: safe = white, lands on a line = red.
 
-### 1.5 İlk ölüm yumuşatması **[DEĞİŞTİ]**
+### 1.5 First death softening **[CHANGED]**
 
-Anında ölüm hypercasual'da D1'i düşürüyor. Her run'da 1 "tökezleme" hakkı
-var: ilk çizgi teması ölüm değil, sendeleme + çarpan sıfırlanması. İkincisi
-öldürür. Yonca (v1.1) bunun üstüne gelir, yerine geçmez.
+Instant death drags D1 down in hypercasual. Every run has 1 "stumble": the
+first line contact is not death but a stagger + multiplier reset. The second
+one kills. Clover (v1.1) comes on top of this, it does not replace it.
 
 ---
 
-## 2. Ritim sistemi
+## 2. Rhythm system
 
-- Başlangıç 100 BPM. Her 30 saniyede +6 BPM, 160 BPM'de tavan.
-- Yürüme hızı BPM'e bağlı; bir adım her zaman tam bir vuruş.
-- Müzik katmanları Perfect serisiyle açılır: 0–4 seri = davul + bas,
-  5–9 = + perküsyon, 10–19 = + melodi, 20+ = + hook. Seri kırılınca en alt
-  katmana düşülür (sert kesme değil, 1 bar içinde fade).
-- **Tüm müzik orijinal.** Lisanslı şarkı kullanılmayacak (maliyet + mağaza
-  riski). Katmanlı stem'ler olarak üretilir, hepsi aynı BPM ızgarasında.
-- **Kaynak kararı (22 Eyl 2026): en sona bırakıldı.** Sıra geldiğinde önce
-  ücretsiz/CC0 stem kütüphaneleri araştırılır, olmazsa AI üretim (Suno/Udio
-  benzeri) denenir. Lisansın mobil mağaza dağıtımını ve reklam
-  kreatiflerinde kullanımı (Content ID temiz) kapsaması şart. Faz 0–2
-  boyunca placeholder metronom + tek loop yeterli.
-- BPM artışı müzikte tempo değişimi olarak değil, **ayrı BPM'lerde
-  hazırlanmış loop setleri** arasında geçişle yapılır (pitch shift kalitesi
-  düşürür). 100/115/130/145/160 BPM için 5 set.
+- Starts at 100 BPM. +6 BPM every 30 seconds, capped at 160 BPM.
+- Walking speed is tied to BPM; one step is always exactly one beat.
+- Music layers unlock with the Perfect streak: 0–4 streak = drums + bass,
+  5–9 = + percussion, 10–19 = + melody, 20+ = + hook. When the streak breaks
+  it drops to the lowest layer (not a hard cut, a fade within 1 bar).
+- **All music is original.** No licensed songs (cost + store risk).
+  Produced as layered stems, all on the same BPM grid.
+- **Sourcing decision (22 Sep 2026): left for last.** When its turn comes,
+  free/CC0 stem libraries are researched first; failing that, AI generation
+  (Suno/Udio-like) is tried. The licence must cover mobile store
+  distribution and use in ad creatives (Content ID clean). A placeholder
+  metronome + a single loop is enough through Phases 0–2.
+- The BPM increase is not done as a tempo change in the music but by
+  switching between **loop sets prepared at separate BPMs** (pitch shifting
+  degrades quality). 5 sets for 100/115/130/145/160 BPM.
 
-### 2.1 Teknik senkronizasyon (uygulama şartı)
+### 2.1 Technical synchronisation (implementation requirement)
 
-- Zaman kaynağı `AudioSettings.dspTime`, asla `Time.time`.
-- Müzik `AudioSource.PlayScheduled` ile başlatılır.
-- Audio Settings → DSP Buffer Size = **Best latency**; klipler
+- The time source is `AudioSettings.dspTime`, never `Time.time`.
+- Music is started with `AudioSource.PlayScheduled`.
+- Audio Settings → DSP Buffer Size = **Best latency**; clips are
   **Decompress On Load**.
-- Unity UI Button kullanılmaz (callback basışta değil bırakışta gelir);
-  girdi `Input`/`InputSystem` ile basış anında okunur.
-- **Kalibrasyon iki aşamalı** (karar değişti — ilk açılışta zorunlu ekran
-  D1'i düşürüyor, bkz. `onboarding.md` §4): (1) öğretici run'ındaki ilk 8
-  geçerli girdiden sessiz tahmin, varsayılan offset olarak kabul edilir;
-  (2) tahmini sapma 40 ms'yi aşıyorsa ilk run sonunda kalibrasyon teklifi.
-  Ayarlardan her zaman erişilebilir ve elle değiştirilebilir. Android'de
-  cihaz gecikmesi 0,01–0,2 sn aralığında değişiyor; offset opsiyonel değil,
-  ama onu isteme biçimi oyunun içinde olmalı.
+- Unity UI Button is not used (its callback fires on release, not on
+  press); input is read at press time through `Input`/`InputSystem`.
+- **Calibration has two stages** (decision changed — a mandatory screen on
+  first launch drags D1 down, see `onboarding.md` §4): (1) a silent estimate
+  from the first 8 valid inputs of the tutorial run is accepted as the
+  default offset; (2) if the estimated offset exceeds 40 ms, calibration is
+  offered at the end of the first run. It is always reachable from settings
+  and can be changed manually. On Android device latency ranges from
+  0.01–0.2 s; the offset is not optional, but the way it is asked for must
+  live inside the game.
 
 ---
 
-## 3. Zemin üretimi
+## 3. Ground generation
 
-### 3.1 Zemin türleri (v1.0 için 3 tanesi)
+### 3.1 Ground types (3 of them for v1.0)
 
-| Zemin | Taş uzunluğu | Not | Sürüm |
+| Ground | Slab length | Note | Version |
 | --- | --- | --- | --- |
-| Kare beton | 1,0 birim, sabit | Öğrenme alanı | v1.0 |
-| Parke taş | 0,5 birim, sabit | Sık uzun adım gerekir | v1.0 |
-| Altıgen karo | 0,8–1,4 birim, değişken | Okuma ister | v1.0 |
-| Kırık beton | değişken + ek çatlaklar | Zor | v1.1 |
-| Rögar kapağı | 2,0 birim güvenli ada | Özel olay | v1.1 |
+| Square concrete | 1.0 units, fixed | Learning area | v1.0 |
+| Paving stone | 0.5 units, fixed | Requires frequent long steps | v1.0 |
+| Hexagonal tile | 0.8–1.4 units, variable | Requires reading | v1.0 |
+| Broken concrete | variable + extra cracks | Hard | v1.1 |
+| Manhole cover | 2.0 unit safe island | Special event | v1.1 |
 
-### 3.2 Üretim algoritması **[DEĞİŞTİ — çözülebilirlik garantisi]**
+### 3.2 Generation algorithm **[CHANGED — solvability guarantee]**
 
-Taşları rastgele dizip sonra "çözülebilir mi" diye kontrol etmek yerine
-**ters üretim** yapılır:
+Instead of laying slabs out randomly and then checking "is it solvable",
+**reverse generation** is used:
 
-1. Zorluğa göre bir adım dizisi seç (örn. `[1.0, 1.5, 1.0, 2.5, 1.0]`).
-   Zorluk = uzun adım/zıplama oranı ve ardışık zor adım sayısı.
-2. Adım dizisini kümülatif topla → ayağın ineceği kesin pozisyonlar.
-3. Taş sınırlarını (çizgileri) bu pozisyonların **arasına** yerleştir;
-   her iniş noktası bir taşın orta %40'ına denk gelecek şekilde hizala.
-4. Seçilen zemin türünün taş uzunluğu kısıtına göre gerekirse ara taşlar
-   ekle — ama iniş noktalarına dokunma.
+1. Pick a step sequence based on difficulty (e.g. `[1.0, 1.5, 1.0, 2.5, 1.0]`).
+   Difficulty = long step/jump ratio and number of consecutive hard steps.
+2. Take the cumulative sum of the step sequence → exact positions where the
+   foot will land.
+3. Place slab boundaries (lines) **between** these positions; align them so
+   every landing point falls in the middle 40% of a slab.
+4. Add filler slabs if the chosen ground type's slab length constraint
+   requires it — but never touch the landing points.
 
-Böylece her dizi tanım gereği en az bir geçerli çözüme sahip.
+This way every sequence has at least one valid solution by definition.
 
-**Çözülebilirlik yetmez — gereklilik de şart [Faz 0'da bulundu].** İlk
-uygulamada geniş boşluklara konan dolgu taşları yaklaşık 1,0 aralıklarla
-diziliyordu; sonuç olarak hiçbir şey yapmayan oyuncu o taşların üstünde
-sürüklenip gidiyordu. Cihaz testinde karakter **hiç dokunulmadan 1000 metre
-yürüdü ve 1600 puan topladı**. Amaçlanan yol tek geçerli yol değildi, hatta
-en kolayı bile değildi.
+**Solvable is not enough — required is also a must [found in Phase 0].** In
+the first implementation, filler slabs placed in wide gaps were laid out at
+roughly 1.0 intervals; as a result a player doing nothing drifted along on
+top of them. In device testing the character **walked 1000 metres and
+scored 1600 points without a single touch**. The intended path was not the
+only valid path — it was not even the easiest one.
 
-Kural eklendi: **normal adımdan uzun bir adımın amaçlandığı her yerde,
-önceki iniş noktasından itibaren her tam 1,0 birimde bir çizgi vardır.**
-Yani "hiçbir şey yapma" seçeneği doğrudan çizgiye götürür. Sadece düz normal
-adımlarda ortaya güvenli çizgi konur.
+Rule added: **wherever a step longer than normal is intended, there is a
+line at every full 1.0 units from the previous landing point.** So the "do
+nothing" option leads straight onto a line. Only on plain normal steps is a
+safe line placed in the middle.
 
-Doğrulama (`Mind the Crack > Validate Generator`): hiçbir şey yapan oyuncu
-500 seed'in hepsinde ölüyor, ortalama 4,1 adımda. Aynı anda amaçlanan yol
-3,48 milyon adımda %100 güvenli ve Perfect'e uygun kalıyor.
+Validation (`Mind the Crack > Validate Generator`): a player doing nothing
+dies on all 500 seeds, after 4.1 steps on average. At the same time the
+intended path stays 100% safe and Perfect-eligible over 3.48 million steps.
 
-**Güvenli açılış:** ilk 8 metre %100 normal adım. Zorluk eğrisi 0 metreden
-başlayınca ilk adımların beşte biri uzun adım istiyordu ve hiçbir şey
-öğretilmemiş oyuncu 4 adımda ölüyordu — `onboarding.md` §2'nin istediği
-"ilk saniyeler kaybedilemez" buradan başlıyor.
+**Safe opening:** the first 8 metres are 100% normal steps. With the
+difficulty curve starting at 0 metres, a fifth of the first steps required a
+long step and a player who had been taught nothing died within 4 steps —
+the "the first seconds cannot be lost" requirement of `onboarding.md` §2
+starts here.
 
-Zorluk eğrisi: mesafeye göre `difficulty = clamp01(distance / 400)`. Bu değer
-uzun adım oranını %20 → %55, zıplama oranını %5 → %25 çeker.
+Difficulty curve: `difficulty = clamp01(distance / 400)` by distance. This
+value pulls the long step ratio from 20% → 55% and the jump ratio from
+5% → 25%.
 
 ---
 
-## 4. Engeller
+## 4. Obstacles
 
-| Engel | Etki | Sürüm |
+| Obstacle | Effect | Version |
 | --- | --- | --- |
-| Su birikintisi | Basınca kayarsın, sonraki adım zorunlu uzun adım | v1.0 |
-| Köpek kakası | Anında ölüm (tökezleme hakkını yakar) | v1.0 |
-| Düşmüş dondurma | Bir vuruş yapışırsın (zorunlu bekleme) | v1.1 |
-| Yavaş yürüyen teyze | Bir vuruş beklemek zorundasın | v1.1 |
+| Puddle | You slip when you step in it; the next step is a forced long step | v1.0 |
+| Dog poop | Instant death (burns the stumble) | v1.0 |
+| Dropped ice cream | You stick for one beat (forced wait) | v1.1 |
+| Slow-walking auntie | You have to wait one beat | v1.1 |
 
-Zorunlu bekleme beat'i ritmik olarak iyi bir fikir ama üretim algoritmasında
-ekstra durum demek; v1.1'e alındı.
-
----
-
-## 5. Batıl inanç ölümleri
-
-Çizgiye basınca rastgele biri tetiklenir, 1–2 sn. v1.0 için 4 tane:
-
-1. Kara kedi önünden geçer, karakter donar.
-2. Tepeden saksı düşer.
-3. Merdiven üstüne devrilir.
-4. Cebinden düşen ayna kırılır.
-
-Aynı ölüm arka arkaya iki kez gösterilmez. Ölüm animasyonu **atlanabilir**
-(ekrana dokunma) — tekrar deneme hızı D1 için animasyon komikliğinden daha
-değerli. Animasyon uzunluğu 1,2 sn tavan.
+A forced wait beat is a good idea rhythmically, but it means extra state in
+the generation algorithm; moved to v1.1.
 
 ---
 
-## 6. Karakterler
+## 5. Superstition deaths
 
-Karakterler oynanışı değiştirir (kozmetik değil).
+Stepping on a line triggers one at random, 1–2 s. 4 of them for v1.0:
 
-| Karakter | Normal adım | Not | Sürüm |
+1. A black cat crosses in front, the character freezes.
+2. A flowerpot falls from above.
+3. A ladder topples over onto them.
+4. A mirror falls out of their pocket and shatters.
+
+The same death is never shown twice in a row. The death animation is
+**skippable** (tap the screen) — retry speed is worth more for D1 than the
+animation's comedy. Animation length is capped at 1.2 s.
+
+---
+
+## 6. Characters
+
+Characters change gameplay (they are not cosmetic).
+
+| Character | Normal step | Note | Version |
 | --- | --- | --- | --- |
-| Standart | 1,0 | Başlangıç | v1.0 |
-| Uzun bacaklı | 1,3 | Büyük taşta rahat, parkede zor | v1.1 |
-| Çocuk | 0,7 | Sık taşta avantajlı | v1.1 |
-| Köpek | 4 ayak, 2 iniş noktası | Zor mod, ayrı üretim kuralı | v1.2 |
+| Standard | 1.0 | Starter | v1.0 |
+| Long-legged | 1.3 | Comfortable on big slabs, hard on paving | v1.1 |
+| Kid | 0.7 | Advantage on dense slabs | v1.1 |
+| Dog | 4 legs, 2 landing points | Hard mode, separate generation rule | v1.2 |
 
-v1.0'da sadece standart karakter + kozmetik ayakkabı/kıyafet olacak. Farklı
-adım uzunluğu, üretim algoritmasının karakter bazlı test edilmesini
-gerektiriyor — meta hazır olmadan açılmaz.
+v1.0 will only have the standard character + cosmetic shoes/outfits.
+Different step lengths require the generation algorithm to be tested per
+character — they do not unlock until the meta is ready.
 
 ---
 
-## 7. Şehirler ve prestij **[DEĞİŞTİ — kozmetik değil, ilerleme yapısı]**
+## 7. Cities and prestige **[CHANGED — not cosmetic, a progression structure]**
 
-Şehirler artık v1.2'ye ertelenmiş tema paketi değil, **prestij döngüsünün
-kendisi**. Bir şehri bitirince "taşınırsın": yükseltmeler sıfırlanır, kalıcı
-çarpan kazanılır, yeni kaldırım deseni + müzik seti + yerel engel açılır.
+Cities are no longer a theme pack deferred to v1.2; they are **the prestige
+loop itself**. When you finish a city you "move": upgrades reset, a
+permanent multiplier is earned, and a new sidewalk pattern + music set +
+local obstacle unlock.
 
-| Şehir | Kaldırım | Yerel engel | Prestij çarpanı | Sürüm |
+| City | Sidewalk | Local obstacle | Prestige multiplier | Version |
 | --- | --- | --- | --- | --- |
-| Başlangıç (jenerik) | Kare beton, parke, altıgen | Su birikintisi, köpek kakası | 1,0× | v1.0 |
-| İstanbul | Arnavut kaldırımı | Sokak kedisi, simitçi tezgahı | 1,5× | v1.1 |
-| Londra | Islak taş | Bol su birikintisi, otobüs durağı | 2,25× | v1.2 |
-| Tokyo | Dar düzenli karo | Yaya akışı | 3,4× | v1.2 |
-| Paris | Altıgen karo | Kafe masası | 5,0× | v1.2 |
+| Starter (generic) | Square concrete, paving, hexagonal | Puddle, dog poop | 1.0× | v1.0 |
+| Istanbul | Cobblestone | Street cat, simit vendor stall | 1.5× | v1.1 |
+| London | Wet stone | Plenty of puddles, bus stop | 2.25× | v1.2 |
+| Tokyo | Narrow regular tiles | Pedestrian flow | 3.4× | v1.2 |
+| Paris | Hexagonal tile | Café table | 5.0× | v1.2 |
 
-Taşınma koşulu: o şehirde toplam X metre + yükseltme ağacının belirli bir
-seviyesi. Çarpan üstel (×1,5) ilerler, böylece her taşınma bir öncekinden
-hissedilir derecede hızlı olur — Hooked Inc'in okyanus bölgeleriyle aynı
-mantık.
+Move condition: X total metres in that city + a certain level in the
+upgrade tree. The multiplier grows exponentially (×1.5), so every move is
+noticeably faster than the previous one — the same logic as Hooked Inc's
+ocean regions.
 
-v1.0'da tek şehir var ama **prestij altyapısı v1.0'da kurulur** (kayıt
-formatı, çarpan alanı, taşınma ekranı iskeleti). Sonradan eklenirse mevcut
-oyuncuların ekonomisi bozulur.
+v1.0 has a single city, but **the prestige infrastructure is built in
+v1.0** (save format, multiplier field, move screen skeleton). Added later,
+it would break existing players' economies.
 
 ---
 
-## 8. İlerleme, ekonomi ve retention **[DEĞİŞTİ — Hooked Inc yapısı]**
+## 8. Progression, economy and retention **[CHANGED — Hooked Inc structure]**
 
-Pazar verisi net: meta'sız hypercasual 2026'da ölçülebilir ürün değil.
-Hybrid casual ARPDAU'su hypercasual'ın ~5 katı. Yapı üç katmanlı:
+The market data is clear: hypercasual without a meta is not a measurable
+product in 2026. Hybrid casual ARPDAU is ~5× that of hypercasual. The
+structure has three layers:
 
-1. **Run (beceri)** — dokunulmaz. Yükseltmeler çekirdek beceriyi etkilemez.
-2. **Yükseltme ağacı** — run'dan kazanılan parayla kalıcı ilerleme.
-3. **Prestij (taşınma)** — §7.
+1. **Run (skill)** — untouchable. Upgrades do not affect core skill.
+2. **Upgrade tree** — permanent progression with coins earned in runs.
+3. **Prestige (moving)** — §7.
 
-### 8.1 Değişmez kural — yükseltme neye dokunur, neye dokunmaz
+### 8.1 Invariant rule — what upgrades touch and what they do not
 
-Ritim oyununda satın alınabilir isabet, oyunu beceri oyunu olmaktan çıkarır
-ve günlük meydan okuma ile sıralamayı anlamsızlaştırır.
+In a rhythm game, purchasable accuracy stops it being a skill game and makes
+the daily challenge and leaderboard meaningless.
 
-| Yükseltilebilir | Yükseltilemez |
+| Upgradable | Not upgradable |
 | --- | --- |
-| Para çarpanı | Zamanlama penceresi (±60 / ±120 ms) |
-| Mıknatıs yarıçapı | Perfect için taş ortası toleransı (%40) |
-| Başlangıç avansı (ilk N metre atlanır) | BPM rampası |
-| Ekstra tökezleme hakkı (maks 2) | Engel sıklığı, üretim zorluk eğrisi |
-| Yonca kapasitesi, pasif gelir | Adım mesafeleri (1,0 / 1,5 / 2,5) |
+| Coin multiplier | Timing window (±60 / ±120 ms) |
+| Magnet radius | Slab centre tolerance for Perfect (40%) |
+| Head start (first N metres skipped) | BPM ramp |
+| Extra stumble (max 2) | Obstacle frequency, generation difficulty curve |
+| Clover capacity, passive income | Step distances (1.0 / 1.5 / 2.5) |
 
-Günlük meydan okumada **tüm yükseltmeler normalize edilir** — herkes aynı
-temel değerlerle oynar. Aksi halde sıralama, beceriyi değil oynama süresini
-ölçer.
+In the daily challenge **all upgrades are normalised** — everyone plays
+with the same base values. Otherwise the leaderboard measures play time,
+not skill.
 
-### 8.2 Yükseltme ağacı — 4 dal × 10 seviye
+### 8.2 Upgrade tree — 4 branches × 10 levels
 
-| Dal | Etkisi | Not |
+| Branch | Effect | Note |
 | --- | --- | --- |
-| **Ayakkabı** | Para çarpanı +%10/seviye | Ana ekonomi dalı |
-| **Şans** | Mıknatıs yarıçapı, yonca düşme şansı | v1.1'de yonca ile tam açılır |
-| **Dayanıklılık** | Başlangıç avansı, ekstra tökezleme (sv. 5 ve 10) | Yeni oyuncuya hissedilir rahatlama |
-| **Mahalle** | Pasif gelir (çevrimdışı), sandık hızı | Geri dönüş sebebi |
+| **Shoes** | Coin multiplier +10%/level | Main economy branch |
+| **Luck** | Magnet radius, clover drop chance | Fully unlocked with clover in v1.1 |
+| **Endurance** | Head start, extra stumble (lv. 5 and 10) | Noticeable relief for new players |
+| **Neighborhood** | Passive (offline) income, chest speed | Reason to come back |
 
-Maliyet eğrisi üstel: `maliyet(n) = taban × 1,6^n`. Taban her dalda farklı.
-Hedef eğri: ilk 3 seviye ilk oturumda alınabilir, 10. seviye prestij olmadan
-alınamaz (taşınmaya zorlar).
+The cost curve is exponential: `cost(n) = base × 1.6^n`. The base differs
+per branch. Target curve: the first 3 levels are affordable in the first
+session, level 10 is not reachable without prestige (it pushes toward
+moving).
 
-### 8.3 Çift para birimi
+### 8.3 Dual currency
 
-| Para | Kaynak (faucet) | Harcama (sink) |
+| Currency | Source (faucet) | Spend (sink) |
 | --- | --- | --- |
-| **Bozuk para** (yumuşak) | Run içi toplama, run sonu ödülü, günlük görev, ödüllü reklam 2× | Yükseltme ağacı, kozmetik |
-| **Yonca** (sert) | Ödüllü reklam, günlük görev, nadir run düşüşü, IAP | Ölüm affı, yükseltme hızlandırma |
+| **Coins** (soft) | In-run pickups, end-of-run reward, daily quests, rewarded ad 2× | Upgrade tree, cosmetics |
+| **Clover** (hard) | Rewarded ads, daily quests, rare run drops, IAP | Death forgiveness, upgrade speed-up |
 
-**Kural:** her faucet'in bir sink'i olmalı. Açılacak şey bitince para
-anlamsızlaşır ve run sonu ödülü ödüllendirici hissettirmez.
+**Rule:** every faucet must have a sink. When there is nothing left to
+unlock, coins become meaningless and the end-of-run reward stops feeling
+rewarding.
 
-Yonca v1.1'de devreye giriyor ama **ekonomi v1.0'da çift para birimine göre
-tasarlanır**; sonradan ikinci para birimi eklemek tüm fiyat dengesini bozar.
+Clover arrives in v1.1, but **the economy is designed for dual currency in
+v1.0**; adding a second currency later breaks the whole price balance.
 
-### 8.4 Çevrimdışı gelir (kısıtlı idle)
+### 8.4 Offline income (limited idle)
 
-Kurgu: açtığın kozmetikleri giyen NPC'ler sen yokken kaldırımda yürür ve az
-miktar bozuk para biriktirir. **Tavan 2–4 saat** (Mahalle dalıyla uzar).
-Amaç oyunu idle'a çevirmek değil, geri dönüş sebebi yaratmak. Oyunun
-kendisi beceri oyunu olarak kalır.
+Setup: NPCs wearing the cosmetics you unlocked walk the sidewalk while you
+are away and collect a small amount of coins. **Cap 2–4 hours** (extended
+by the Neighborhood branch). The goal is not to turn the game into an idle
+game but to create a reason to return. The game itself stays a skill game.
 
-### 8.5 v1.0'da olacaklar
+### 8.5 In v1.0
 
-- Para, yükseltme ağacı (4 dal, 10 seviye), çevrimdışı gelir, kozmetik.
-- Günlük 3 görev, gece yarısı sıfırlama.
-- Mesafe kilometre taşları (100/250/500/1000 m) — ilk oturumda ≥2 açılmalı.
-- Prestij altyapısı (tek şehir, taşınma UI'si v1.1'de).
-- Yonca, günlük meydan okuma + sıralama, paylaşım klibi → v1.1.
+- Coins, upgrade tree (4 branches, 10 levels), offline income, cosmetics.
+- 3 daily quests, midnight reset.
+- Distance milestones (100/250/500/1000 m) — ≥2 should unlock in the first
+  session.
+- Prestige infrastructure (single city, moving UI in v1.1).
+- Clover, daily challenge + leaderboard, share clip → v1.1.
 
-### 8.6 Ekonomi dengeleme — ayrı iş kalemi
+### 8.6 Economy balancing — a separate work item
 
-Tek kişilik ekipte en çok hafife alınan iş. Sayılar kodda değil, bir
-tabloda (Google Sheets / CSV) kurulur ve Unity'ye ScriptableObject olarak
-aktarılır. Modellenecek: ortalama run süresi × run başına para × oturum
-sayısı → hangi günde hangi seviyeye ulaşılıyor. Hedef eğri: 1. gün 3–4
-yükseltme, 7. gün ilk taşınma.
+The most underestimated job in a one-person team. Numbers are set up in a
+table (Google Sheets / CSV), not in code, and exported to Unity as a
+ScriptableObject. To be modelled: average run length × coins per run ×
+session count → which level is reached on which day. Target curve: 3–4
+upgrades on day 1, first move on day 7.
 
-### 8.7 Günlük meydan okuma (v1.1)
+### 8.7 Daily challenge (v1.1)
 
-Herkese aynı seed, tek deneme, yükseltmeler normalize. Seed = tarih; üretim
-algoritması deterministik olduğu için sunucu gerekmez, sadece skor tablosu
-gerekir (Firebase).
+Same seed for everyone, one attempt, upgrades normalised. Seed = date; since
+the generation algorithm is deterministic no server is needed, only a
+leaderboard (Firebase).
 ---
 
-## 9. Paylaşılabilirlik (v1.1)
+## 9. Shareability (v1.1)
 
-Ölümün son 5 saniyesi kaydedilir, tek tuşla paylaşılır. Skor ekranında komik
-metin: "Annemin sırtını 347 metre korudum." Metinler mesafeye göre havuzdan
-seçilir, 20 varyant.
+The last 5 seconds before death are recorded and shared with one tap. Funny
+text on the score screen: "Protected my mother's back for 347 metres." Texts
+are picked from a pool by distance, 20 variants.
 
-Not: ekran kaydı Unity'de `Recorder` paketi mobilde ağır; alternatif olarak
-son 5 saniyenin **girdi kaydından** yeniden oynatılıp kaydedilmesi daha ucuz.
-Karar v1.1'de, prototiple ölçülerek verilir.
-
----
-
-## 10. Monetizasyon
-
-Detaylı gerekçe `market-research.md` §5'te.
-
-| Yerleşim | Kural | Sürüm |
-| --- | --- | --- |
-| Ödüllü — devam et | Ölünce, oturum başına 1 kez | v1.0 |
-| Ödüllü — parayı 2×'le | Run sonu ekranı | v1.0 |
-| Geçiş reklamı | 3–4 ölümde bir; **ilk 3 run'da asla**; 90 sn soğuma | v1.0 |
-| Reklamsız + başlangıç paketi | Tek seferlik ~4,99 USD, abonelik yok | v1.0 |
-| Ödüllü — çevrimdışı geliri 2×'le | Oyuna dönüşte, günde 2 kez | v1.0 |
-| Ödüllü — yükseltme indirimi | Bir sonraki yükseltme %30 ucuz, günde 1 kez | v1.0 |
-| Para paketi IAP | Bozuk para + yonca paketleri | v1.1 |
-
-Yükseltme ağacı üç yeni ödüllü reklam yerleşimi doğuruyor (çevrimdışı gelir
-2×, yükseltme indirimi, run sonu para 2×). Bunlar ARPDAU'nun asıl kaldıracı:
-oyuncu reklamı ceza olarak değil, ilerlemeyi hızlandıran araç olarak görür.
-Toplam ödüllü yerleşim sayısı 5'i geçmemeli — geçerse oyun reklam
-kliklemeye dönüşür ve `ADS_POLICY.md` sınırları zorlanır.
-
-Stüdyonun bağlayıcı reklam kuralları için `C:\Projects\pictures\ADS_POLICY.md`
-okunacak — buradaki tablo ona aykırı olamaz.
+Note: screen recording with Unity's `Recorder` package is heavy on mobile;
+alternatively, replaying and recording the last 5 seconds from an **input
+recording** is cheaper. Decided in v1.1 by measuring a prototype.
 
 ---
 
-## 11. Görsel ve ses yönü
+## 10. Monetisation
 
-- Kamera: arkadan-yukarıdan, ~35° eğim. Hem karakter hem önündeki 4–5 taş
-  okunmalı.
-- Stil: low-poly, pastel palet. **Okunabilirlik her şeyden önce**: taş
-  birleşim çizgileri paletin en koyu değeri, taş yüzeyi en açık değeri.
-  Renk körlüğü modu gerekmez çünkü ayrım renk değil kontrast üzerinden.
-- Ses: her adımda vuruşa oturan tık, Perfect'te "ding", seri kırılınca kısa
-  düşüş sesi, ölümde komik efekt.
-- Titreşim (haptic): Perfect'te hafif, ölümde sert. Ayarlardan kapatılabilir.
+Detailed rationale in `market-research.md` §5.
+
+| Placement | Rule | Version |
+| --- | --- | --- |
+| Rewarded — continue | On death, once per session | v1.0 |
+| Rewarded — double coins | End-of-run screen | v1.0 |
+| Interstitial | Every 3–4 deaths; **never in the first 3 runs**; 90 s cooldown | v1.0 |
+| No ads + starter pack | One-time ~4.99 USD, no subscription | v1.0 |
+| Rewarded — double offline income | On returning to the game, twice a day | v1.0 |
+| Rewarded — upgrade discount | Next upgrade 30% cheaper, once a day | v1.0 |
+| Coin pack IAP | Coin + clover packs | v1.1 |
+
+The upgrade tree creates three new rewarded ad placements (offline income
+2×, upgrade discount, end-of-run coins 2×). These are the real ARPDAU lever:
+the player sees the ad not as a punishment but as a tool that speeds up
+progression. The total number of rewarded placements must not exceed 5 —
+beyond that the game turns into ad clicking and the `ADS_POLICY.md` limits
+are strained.
+
+The studio's binding ad rules in `C:\Projects\pictures\ADS_POLICY.md` must
+be read — the table here cannot contradict it.
 
 ---
 
-## 12. Sürüm planı **[DEĞİŞTİ — meta öne çekildi]**
+## 11. Visual and audio direction
 
-| Sürüm | İçerik | Hedef |
+- Camera: behind and above, ~35° tilt. Both the character and the 4–5
+  slabs ahead of them must be readable.
+- Style: low-poly, pastel palette. **Readability above all**: the lines
+  between slabs are the darkest value in the palette, the slab surface the
+  lightest. No colour-blind mode is needed because the distinction is
+  contrast, not colour.
+- Audio: a click on every step that sits on the beat, a "ding" on Perfect,
+  a short drop sound when the streak breaks, a comic effect on death.
+- Haptics: light on Perfect, strong on death. Can be turned off in settings.
+
+---
+
+## 12. Release plan **[CHANGED — meta brought forward]**
+
+| Version | Content | Target |
 | --- | --- | --- |
-| **v0.1 dikey dilim** | Gri kutular, tek zemin, metronom, ölüm yok, meta yok | "Eğlenceli mi?" sorusunun cevabı |
-| **v1.0 (MVP)** | 3 zemin, 2 engel, 4 ölüm, standart karakter, kalibrasyon · **yükseltme ağacı (4 dal × 10 sv.), çift para birimi, çevrimdışı gelir, prestij altyapısı** · günlük görev, kilometre taşları · tüm reklam yerleşimleri | D1 ≥ %35, D7 ≥ %15 |
-| **v1.1** | İstanbul (ilk gerçek taşınma) + taşınma UI'si, yonca, günlük meydan okuma, paylaşım klibi, 2 karakter, 2 zemin, 2 engel | D7 ≥ %20, ARPDAU ≥ 0,12 USD |
-| **v1.2** | Londra/Tokyo/Paris, köpek karakteri, skin mağazası, sezonluk etkinlik | LiveOps |
+| **v0.1 vertical slice** | Grey boxes, single ground, metronome, no death, no meta | The answer to "is it fun?" |
+| **v1.0 (MVP)** | 3 grounds, 2 obstacles, 4 deaths, standard character, calibration · **upgrade tree (4 branches × 10 lv.), dual currency, offline income, prestige infrastructure** · daily quests, milestones · all ad placements | D1 ≥ 35%, D7 ≥ 15% |
+| **v1.1** | Istanbul (first real move) + moving UI, clover, daily challenge, share clip, 2 characters, 2 grounds, 2 obstacles | D7 ≥ 20%, ARPDAU ≥ 0.12 USD |
+| **v1.2** | London/Tokyo/Paris, dog character, skin store, seasonal event | LiveOps |
 
-**D7 hedefi yükseldi** (%12 → %15) çünkü v1.0 artık yükseltme ağacı ve
-çevrimdışı gelirle geliyor; meta varsa D7 beklentisi de yükselir. Hybrid
-casual bandı %15–22.
+**The D7 target went up** (12% → 15%) because v1.0 now ships with the
+upgrade tree and offline income; with a meta, the D7 expectation rises too.
+The hybrid casual band is 15–22%.
 
-v1.1'e geçmeden önce v1.0 verisine bakılır: D1, D7, oturum süresi,
-run/oturum, **yükseltme ağacında kaçıncı seviyede takılındığı**, çevrimdışı
-gelir için dönüş oranı, ödüllü reklam izleme oranı, hangi mesafede ölündüğü
-histogramı.
+Before moving on to v1.1, v1.0 data is reviewed: D1, D7, session length,
+runs/session, **at which level players get stuck in the upgrade tree**,
+return rate for offline income, rewarded ad watch rate, a histogram of the
+distance at which players die.

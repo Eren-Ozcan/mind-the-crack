@@ -1,148 +1,151 @@
-# Mind the Crack — Ekonomi Modeli
+# Mind the Crack — Economy Model
 
-Bu dosya ekonomi sayılarının **tek doğru kaynağıdır**. Unity tarafında
-ScriptableObject'e buradaki değerler aktarılır; kodda sabit sayı yazılmaz.
+This file is the **single source of truth** for economy numbers. On the Unity
+side these values are copied into a ScriptableObject; no numbers are
+hardcoded.
 
-Model çalıştırılabilir: `python tools/economy_sim.py`. Sayı değiştirileceği
-zaman önce simülasyon çalıştırılır, dört hedef kontrolü de OK vermeden
-değer kabul edilmez.
+The model is runnable: `python tools/economy_sim.py`. Before changing a
+number, run the simulation first; a value is not accepted until all four
+target checks report OK.
 
-## 1. Hedef eğri ve doğrulama durumu
+## 1. Target curve and validation status
 
-| Hedef | Durum |
+| Target | Status |
 | --- | --- |
-| 1. gün 3–4 yükseltme alınabilmeli | ✅ 3 |
-| ~7. gün ilk taşınma mümkün olmalı | ✅ 8. gün |
-| 7. günde hiçbir dal 10. seviyede olmamalı | ✅ hiçbiri |
-| Sink kurumamalı (40/40 seviyedeyken taşınma yoksa para yığılır) | ✅ yok |
+| 3–4 upgrades affordable on day 1 | ✅ 3 |
+| First move possible around day 7 | ✅ day 8 |
+| No branch at level 10 on day 7 | ✅ none |
+| Sink must not dry up (at 40/40 levels with no move, coins pile up) | ✅ none |
 
-Taşınma günleri (30 günlük simülasyon): **8, 13, 17, 22, 28** — aralık
-5, 4, 5, 6 gün. Aralığın zamanla açılması istenen davranış: her şehir bir
-öncekinden biraz uzun sürer, oyun uzun vadede tükenmez.
+Move days (30-day simulation): **8, 13, 17, 22, 28** — gaps of 5, 4, 5, 6
+days. The gap widening over time is intended: each city takes a little
+longer than the previous one, so the game does not run dry in the long term.
 
-## 2. Maliyet formülü
+## 2. Cost formula
 
 ```
-maliyet(dal, seviye, şehir) = taban[dal] × 1,90^şehir × 1,60^seviye
+cost(branch, level, city) = base[branch] × 1.90^city × 1.60^level
 ```
 
-- `seviye` 0 tabanlı (ilk satın alma seviye 0'ın fiyatıdır).
-- `şehir` kaçıncı taşınma (0 = başlangıç şehri).
-- **1,90 > 1,50** (prestij çarpanı) bilinçli: maliyet gelirden hızlı
-  büyür, yoksa her taşınma bir öncekinden kısa sürer ve oyun 3 haftada
-  anlamsızlaşır.
+- `level` is 0-based (the first purchase costs the level 0 price).
+- `city` is the move count (0 = starting city).
+- **1.90 > 1.50** (prestige multiplier) is deliberate: cost grows faster
+  than income, otherwise every move takes less time than the one before and
+  the game becomes meaningless within 3 weeks.
 
-### Taban maliyetler ve ilk şehir tablosu
+### Base costs and first-city table
 
-| Dal | Taban | sv1 | sv2 | sv3 | sv4 | sv5 | sv6 | sv7 | sv8 | sv9 | sv10 | Toplam |
+| Branch | Base | lv1 | lv2 | lv3 | lv4 | lv5 | lv6 | lv7 | lv8 | lv9 | lv10 | Total |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Ayakkabı | 50 | 50 | 80 | 128 | 205 | 328 | 524 | 839 | 1342 | 2147 | 3436 | 9.079 |
-| Dayanıklılık | 70 | 70 | 112 | 179 | 287 | 459 | 734 | 1174 | 1879 | 3006 | 4810 | 12.710 |
-| Mahalle | 90 | 90 | 144 | 230 | 369 | 590 | 944 | 1510 | 2416 | 3865 | 6185 | 16.343 |
-| Şans | 120 | 120 | 192 | 307 | 492 | 786 | 1258 | 2013 | 3221 | 5154 | 8246 | 21.789 |
+| Shoes | 50 | 50 | 80 | 128 | 205 | 328 | 524 | 839 | 1342 | 2147 | 3436 | 9,079 |
+| Endurance | 70 | 70 | 112 | 179 | 287 | 459 | 734 | 1174 | 1879 | 3006 | 4810 | 12,710 |
+| Neighborhood | 90 | 90 | 144 | 230 | 369 | 590 | 944 | 1510 | 2416 | 3865 | 6185 | 16,343 |
+| Luck | 120 | 120 | 192 | 307 | 492 | 786 | 1258 | 2013 | 3221 | 5154 | 8246 | 21,789 |
 
-İlk şehirde 40 seviyenin tamamı: **59.921 para**.
+All 40 levels in the first city: **59,921 coins**.
 
-Taban sıralaması rastgele değil: Ayakkabı en ucuz çünkü para çarpanı ana
-ekonomi motoru — oyuncunun ilk aldığı şey o olmalı. Şans en pahalı çünkü
-v1.0'da etkisi en zayıf dal (yonca v1.1'de açılıyor).
+The base ordering is not arbitrary: Shoes is cheapest because the coin
+multiplier is the main economy engine — it should be the first thing the
+player buys. Luck is most expensive because it is the weakest branch in
+v1.0 (clover unlocks in v1.1).
 
-## 3. Dal etkileri
+## 3. Branch effects
 
-| Dal | Seviye başına etki | Seviye 10'da |
+| Branch | Effect per level | At level 10 |
 | --- | --- | --- |
-| **Ayakkabı** | Para çarpanı +%10 | ×2,0 |
-| **Dayanıklılık** | Başlangıç avansı +12 m | +120 m; sv5 ve sv10'da ekstra tökezleme hakkı |
-| **Mahalle** | Çevrimdışı +6 para/saat, tavan +0,4 saat | 60 para/saat, 6 saat tavan |
-| **Şans** | Mıknatıs → toplama verimi +%4 | +%40; v1.1'de yonca düşme şansı |
+| **Shoes** | Coin multiplier +10% | ×2.0 |
+| **Endurance** | Head start +12 m | +120 m; extra stumble at lv5 and lv10 |
+| **Neighborhood** | Offline +6 coins/hour, cap +0.4 hours | 60 coins/hour, 6 hour cap |
+| **Luck** | Magnet → pickup efficiency +4% | +40%; clover drop chance in v1.1 |
 
-Çarpanlar çarpımsal birleşir: `para çarpanı = (1 + 0,10×Ayakkabı) ×
-(1 + 0,04×Şans) × prestij çarpanı`.
+Multipliers combine multiplicatively: `coin multiplier = (1 + 0.10×Shoes) ×
+(1 + 0.04×Luck) × prestige multiplier`.
 
-**Hiçbiri zamanlama penceresine, Perfect toleransına, BPM rampasına veya
-adım mesafelerine dokunmaz** — tasarım dokümanı §8.1'deki değişmez kural.
+**None of them touch the timing window, Perfect tolerance, BPM ramp or
+step distances** — the invariant rule in the design document §8.1.
 
-## 4. Run ekonomisi
+## 4. Run economy
 
-| Değişken | Değer | Not |
+| Variable | Value | Note |
 | --- | --- | --- |
-| Kaldırımdan toplanan | 0,22 para/metre | Yaklaşık her 4–5 metrede bir para |
-| Run sonu bonusu | 0,08 para/metre | Ödüllü reklamla 2× |
-| Ödüllü 2× izleme oranı | %35 | Varsayım — Faz 4'te ölçülüp güncellenecek |
-| Çevrimdışı alım | Günde 2 kez | Tavan Mahalle seviyesine bağlı |
+| Collected on the sidewalk | 0.22 coins/metre | Roughly one coin every 4–5 metres |
+| End-of-run bonus | 0.08 coins/metre | 2× with a rewarded ad |
+| Rewarded 2× watch rate | 35% | Assumption — to be measured and updated in Phase 4 |
+| Offline claims | 2 per day | Cap depends on Neighborhood level |
 
-Yeni oyuncu, 70 metrelik bir run'dan yaklaşık **23 para** kazanır. İlk gün
-(2 oturum × 5 run) ~230 para → 3 yükseltme.
+A new player earns roughly **23 coins** from a 70 metre run. Day 1
+(2 sessions × 5 runs) ~230 coins → 3 upgrades.
 
-## 5. Prestij (taşınma)
+## 5. Prestige (moving)
 
-- **Koşul:** toplam 28/40 seviye. Mesafe şartı **yok** (gerekçe §7).
-- **Ödül:** kalıcı para çarpanı ×1,5 (birikimli: 1,5 → 2,25 → 3,38 → …).
-- **Sıfırlanan:** tüm yükseltme seviyeleri, mevcut para.
-- **Sıfırlanmayan:** kozmetikler, rekor mesafe, günlük görev ilerlemesi,
-  prestij çarpanı.
-- **Açılan:** yeni şehir — kaldırım deseni, müzik seti, yerel engel.
+- **Condition:** 28/40 total levels. **No** distance requirement (rationale in §7).
+- **Reward:** permanent coin multiplier ×1.5 (compounding: 1.5 → 2.25 → 3.38 → …).
+- **Reset:** all upgrade levels, current coins.
+- **Kept:** cosmetics, best distance, daily quest progress, prestige
+  multiplier.
+- **Unlocked:** new city — sidewalk pattern, music set, local obstacle.
 
-Taşınma sonrası ilk gün 9–12 yükseltme birden alınır. Bu kasıtlı: prestij
-oyunlarında taşınma sonrası ilk saat en tatmin edici andır. Maliyet
-tabanının ×1,90 büyümesi bu hızı ikinci günden itibaren normale döndürür.
+On the first day after a move, 9–12 upgrades are bought at once. This is
+intentional: in prestige games the first hour after a move is the most
+satisfying moment. The ×1.90 growth of the cost base brings the pace back
+to normal from the second day on.
 
-## 6. Para birimleri ve sink dengesi
+## 6. Currencies and sink balance
 
-| Para | Kaynak (faucet) | Harcama (sink) |
+| Currency | Source (faucet) | Spend (sink) |
 | --- | --- | --- |
-| **Bozuk para** | Run içi toplama, run sonu bonusu, günlük görev, çevrimdışı gelir, ödüllü 2× | Yükseltme ağacı (ana sink), kozmetik |
-| **Yonca** (v1.1) | Ödüllü reklam, günlük görev, nadir run düşüşü, IAP | Ölüm affı, yükseltme hızlandırma |
+| **Coins** | In-run pickups, end-of-run bonus, daily quests, offline income, rewarded 2× | Upgrade tree (main sink), cosmetics |
+| **Clover** (v1.1) | Rewarded ads, daily quests, rare run drops, IAP | Death forgiveness, upgrade speed-up |
 
-### Kozmetik fiyatları (v1.0, 8 parça — ikincil sink)
+### Cosmetic prices (v1.0, 8 items — secondary sink)
 
-| Parça | Fiyat |
+| Item | Price |
 | --- | --- |
-| Ayakkabı × 3 | 250 / 900 / 2.500 |
-| Kıyafet × 3 | 400 / 1.400 / 3.500 |
-| Şapka × 2 | 1.800 / 6.000 |
+| Shoes × 3 | 250 / 900 / 2,500 |
+| Outfit × 3 | 400 / 1,400 / 3,500 |
+| Hat × 2 | 1,800 / 6,000 |
 
-Toplam 16.750 para. Yükseltme ağacının yanında bilinçli olarak küçük:
-kozmetik ana sink değil, yükseltmeyi geciktirmeyen bir yan hedef.
+Total 16,750 coins. Deliberately small next to the upgrade tree: cosmetics
+are not the main sink, just a side goal that does not delay upgrades.
 
-## 7. Reddedilen varyantlar (tekrar denenmesin)
+## 7. Rejected variants (do not retry)
 
-**Mesafe şartlı prestij** — "o şehirde toplam 12.000 m yürü + 20 seviye"
-denendi. Sonuç: oyuncu 40/40 seviyeye ulaşıp harcayacak yer kalmadan
-mesafe şartını bekliyor; 19.–22. günlerde bakiye 145.000 paraya yığıldı ve
-her yükseltme maksimumdaydı. **Sink kurudu.** Prestij koşulu yalnızca
-seviyeye bağlandı.
+**Distance-gated prestige** — "walk 12,000 m total in that city + 20
+levels" was tried. Result: the player reaches 40/40 levels and waits on the
+distance requirement with nothing left to spend on; on days 19–22 the
+balance piled up to 145,000 coins with every upgrade maxed. **The sink
+dried up.** The prestige condition was tied to levels only.
 
-**Şehir maliyet çarpanı 1,45** — prestij çarpanından (1,5) küçük olduğu
-için her taşınma bir öncekinden kısa sürdü (aralık 5 → 4 → 3 → 3 gün) ve
-30. günde çarpan 11,4×'e fırladı. 1,90'a çıkarıldı.
+**City cost multiplier 1.45** — being smaller than the prestige multiplier
+(1.5), every move took less time than the one before (gaps 5 → 4 → 3 → 3
+days) and the multiplier shot up to 11.4× by day 30. Raised to 1.90.
 
-**Prestij eşiği 30/40 seviye** — ilk taşınma 9. güne kaydı, 7 gün hedefinin
-dışına çıktı. 28'e indirildi.
+**Prestige threshold 30/40 levels** — the first move slipped to day 9,
+outside the 7-day target. Lowered to 28.
 
-## 8. v1.0'ın bilinen sınırı
+## 8. Known limit of v1.0
 
-v1.0'da tek şehir var, yani **taşınma yok**. Simülasyon (prestij kapalı)
-40/40 seviyeye **15. günde** ulaşıldığını gösteriyor. O noktadan sonra
-yükseltme sink'i biter, elde kozmetikler ve skor kovalamak kalır.
+v1.0 has a single city, so **no moving**. The simulation (prestige off)
+shows 40/40 levels reached on **day 15**. From that point the upgrade sink
+is exhausted, leaving cosmetics and score chasing.
 
-Bu v1.0 için kabul edilebilir: v1.0 ölçüm sürümü, ölçülecek pencere D1–D7.
-Ama **v1.1 (İstanbul + taşınma) iki hafta içinde yetişmeli**, yoksa erken
-oyuncular tükenmiş bir oyunda kalır.
+This is acceptable for v1.0: v1.0 is a measurement release and the window
+to measure is D1–D7. But **v1.1 (Istanbul + moving) must ship within two
+weeks**, otherwise early players are left in an exhausted game.
 
-## 9. Varsayımlar — Faz 4'te ölçülüp güncellenecek
+## 9. Assumptions — to be measured and updated in Phase 4
 
-Bu sayılar oyun yokken kuruldu, hepsi hipotez:
+These numbers were set before the game existed; all of them are hypotheses:
 
-| Varsayım | Değer | Nasıl ölçülür |
+| Assumption | Value | How it is measured |
 | --- | --- | --- |
-| Ortalama ilk gün run mesafesi | 70 m | `run_end.distance` histogramı |
-| Beceri artışı | gün başına +%18, tavan 650 m | Gün bazlı ortalama mesafe |
-| Oturum/gün | 1. gün 2, sonra 3 | Firebase oturum sayısı |
-| Run/oturum | 5 | `run_start` / oturum |
-| Ödüllü 2× izleme oranı | %35 | `ad_rewarded` / `run_end` |
-| Çevrimdışı alım/gün | 2 | `offline_income_claimed` |
+| Average day 1 run distance | 70 m | `run_end.distance` histogram |
+| Skill growth | +18% per day, capped at 650 m | Average distance per day |
+| Sessions/day | 2 on day 1, then 3 | Firebase session count |
+| Runs/session | 5 | `run_start` / session |
+| Rewarded 2× watch rate | 35% | `ad_rewarded` / `run_end` |
+| Offline claims/day | 2 | `offline_income_claimed` |
 
-Gerçek veri geldiğinde `tools/economy_sim.py` başındaki sabitler
-güncellenir, dört hedef kontrolü tekrar çalıştırılır, maliyet tabanları
-gerekiyorsa yeniden ayarlanır.
+When real data arrives, the constants at the top of `tools/economy_sim.py`
+are updated, the four target checks are rerun, and cost bases are retuned
+if needed.
