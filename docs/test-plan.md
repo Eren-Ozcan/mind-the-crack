@@ -1,198 +1,204 @@
-# Mind the Crack — Test Planı
+# Mind the Crack — Test Plan
 
-Kapsam: v1.0 (Android). iOS sonraya bırakıldı. **Ücretli test trafiği
-bütçesi yok** — bu, ölçüm stratejisini kökten değiştiriyor, §6'ya bak.
+Scope: v1.0 (Android). iOS was deferred. **There is no paid test traffic
+budget** — this fundamentally changes the measurement strategy, see §6.
 
-## 1. Test katmanları
+## 1. Test layers
 
-| Katman | Ne zaman | Kim | Neyi cevaplar |
+| Layer | When | Who | What it answers |
 | --- | --- | --- | --- |
-| A — Otomatik testler | Her commit | CI yok, elle `python`/Unity Test Runner | Üretim bozuldu mu, kayıt bozuldu mu |
-| B — Ses gecikmesi matrisi | Faz 1 sonu, Faz 3 sonu | Eren | Oyun farklı cihazlarda adil mi |
-| C — Oynanabilirlik seansı | Faz 0 kapısı, Faz 2 sonu | 8–10 kişi, yanında oturarak | Eğlenceli mi, öğretici anlaşılıyor mu |
-| D — Kapalı test (Play Console) | Faz 3 sonu, 2–3 hafta | 12–30 tanıdık | Çökme, cihaz uyumu, uzun vadeli hatalar |
-| E — Üretim ölçümü | Yayından sonra sürekli | Organik oyuncular | D1/D7, ekonomi eğrisi, reklam performansı |
+| A — Automated tests | Every commit | No CI, manually via `python`/Unity Test Runner | Did generation break, did saving break |
+| B — Audio latency matrix | End of Phase 1, end of Phase 3 | Eren | Is the game fair across devices |
+| C — Playability session | Phase 0 gate, end of Phase 2 | 8–10 people, sitting next to them | Is it fun, is the tutorial understood |
+| D — Closed test (Play Console) | End of Phase 3, 2–3 weeks | 12–30 acquaintances | Crashes, device compatibility, long-term bugs |
+| E — Production measurement | Continuously after launch | Organic players | D1/D7, economy curve, ad performance |
 
-## 2. Katman A — Otomatik testler
+## 2. Layer A — Automated tests
 
-Bunlar elle test edilemeyecek kadar çok durum içeriyor; test yazılmazsa
-hatalar üretimde bulunur.
+These cover more cases than can be tested by hand; if the tests are not
+written, the bugs are found in production.
 
-| Test | Yöntem | Geçme kriteri |
+| Test | Method | Pass criterion |
 | --- | --- | --- |
-| Üretim çözülebilirliği | 10.000 seed × 3 zemin türü üret, her segmentte en az bir geçerli adım dizisi olduğunu doğrula | %100 |
-| Üretim determinizmi | Aynı seed iki kez → bayt bayt aynı segment | %100 (günlük meydan okuma buna dayanıyor) |
-| Zorluk eğrisi sınırları | 0–2000 m arası uzun adım/zıplama oranları tanımlı aralıkta mı | Sapma yok |
-| Kayıt yükle/kaydet | Rastgele 1.000 durum yaz-oku | Kayıpsız |
-| Kayıt geri uyumluluk | v1.0 kaydı sonraki şema ile açılır | Çökme yok, eksik alan varsayılana düşer |
-| Ekonomi modeli | `python tools/economy_sim.py` | 4 hedef kontrolü de OK |
-| Çevrimdışı gelir istismarı | Cihaz saati ileri/geri alınmış senaryolar | Geri alınca gelir verilmez, ileri alınca tavanı aşmaz |
-| Yükseltme sınırları | Hiçbir yükseltme zamanlama penceresine/Perfect toleransına yazamaz | Kod seviyesinde test: run parametreleri değişmez |
+| Generation solvability | Generate 10,000 seeds × 3 ground types, verify every segment has at least one valid step sequence | 100% |
+| Generation determinism | Same seed twice → byte-for-byte identical segment | 100% (the daily challenge depends on it) |
+| Difficulty curve bounds | Are long step/jump ratios within the defined range between 0–2000 m | No deviation |
+| Save load/store | Write-read 1,000 random states | Lossless |
+| Save backward compatibility | A v1.0 save opens with the next schema | No crash, missing fields fall back to defaults |
+| Economy model | `python tools/economy_sim.py` | All 4 target checks OK |
+| Offline income exploit | Scenarios with the device clock moved forward/back | Moving it back grants no income, moving it forward does not exceed the cap |
+| Upgrade limits | No upgrade can write to the timing window/Perfect tolerance | Code-level test: run parameters do not change |
 
-Son madde önemli: tasarımın en kritik kuralı (§8.1) sadece doküman değil,
-**test** olmalı. Aksi halde bir gün birisi "Şans dalı pencereyi 10 ms
-açsın" der ve oyunun adaleti sessizce ölür.
+The last item matters: the design's most critical rule (§8.1) must be a
+**test**, not just a document. Otherwise one day someone says "let the Luck
+branch widen the window by 10 ms" and the game's fairness quietly dies.
 
-## 3. Katman B — Ses gecikmesi matrisi
+## 3. Layer B — Audio latency matrix
 
-Ritim oyununun tek varoluşsal riski. Android'de cihaz gecikmesi 0,01–0,2
-saniye arasında değişiyor.
+The one existential risk of a rhythm game. On Android device latency ranges
+from 0.01 to 0.2 seconds.
 
-### Cihaz matrisi (en az 8 cihaz)
+### Device matrix (at least 8 devices)
 
-| Sınıf | Örnek | Neden |
+| Class | Example | Why |
 | --- | --- | --- |
-| Düşük uç, eski Android (9–11) | Android Go, 2–3 GB RAM | En kötü ses gecikmesi burada |
-| Orta sınıf Samsung | A serisi | Türkiye'de en yaygın |
-| Orta sınıf Xiaomi/Redmi | MIUI ses yolu farklı | MIUI'nin kendi ses işleme katmanı var |
-| Amiral gemisi, 120 Hz | Yüksek tazeleme hızı | Kare hızı ile `dspTime` ilişkisi |
-| Tablet | 60 Hz, büyük ekran | Düzen kırılması |
-| Bluetooth kulaklık takılı | Herhangi biri | BT gecikmesi 100–300 ms, felaket senaryosu |
-| Hoparlör vs kablolu kulaklık | Aynı cihaz iki mod | Çıkış yolu değişince offset değişir |
-| Düşük pil / termal kısma | Uzun oturum sonrası | Kare düşünce senkron bozuluyor mu |
+| Low end, old Android (9–11) | Android Go, 2–3 GB RAM | Worst audio latency is here |
+| Mid-range Samsung | A series | Most common in Turkey |
+| Mid-range Xiaomi/Redmi | Different MIUI audio path | MIUI has its own audio processing layer |
+| Flagship, 120 Hz | High refresh rate | Relation between frame rate and `dspTime` |
+| Tablet | 60 Hz, large screen | Layout breakage |
+| Bluetooth headphones connected | Any | BT latency 100–300 ms, the disaster scenario |
+| Speaker vs wired headphones | Same device, two modes | Offset changes when the output path changes |
+| Low battery / thermal throttling | After a long session | Does sync break when frames drop |
 
-### Protokol
+### Protocol
 
-1. Cihazda test modu açılır (debug menüsü): metronom çalar, oyuncu 20 kez
-   vuruşa dokunur.
-2. Kaydedilen: her dokunuşun `dspTime` sapması (ms), ortalama, standart
-   sapma.
-3. Aynı test kulaklıklı/kulaklıksız tekrarlanır.
-4. Sonuç tabloya yazılır: `docs/latency-results.md` (cihaz, Android sürümü,
-   çıkış yolu, ortalama sapma, std sapma, tarih).
+1. Test mode is enabled on the device (debug menu): the metronome plays,
+   the player taps on the beat 20 times.
+2. Recorded: the `dspTime` offset (ms) of every tap, the mean, the standard
+   deviation.
+3. The same test is repeated with and without headphones.
+4. The result is written to a table: `docs/latency-results.md` (device,
+   Android version, output path, mean offset, std deviation, date).
 
-### Geçme kriterleri
+### Pass criteria
 
-| Ölçüt | Eşik |
+| Metric | Threshold |
 | --- | --- |
-| Kalibrasyon sonrası ortalama sapma | ≤ 25 ms |
-| Sapmanın standart sapması | ≤ 30 ms (bu düzelmiyorsa cihaz tutarsız demektir) |
-| Otomatik tahminin elle kalibrasyona farkı | ≤ 20 ms |
-| Bluetooth'ta oyun | Kalibrasyon sonrası oynanabilir olmalı; olmuyorsa oyun BT tespit edip uyarı göstermeli |
+| Mean offset after calibration | ≤ 25 ms |
+| Standard deviation of the offset | ≤ 30 ms (if this does not improve, the device is inconsistent) |
+| Difference between automatic estimate and manual calibration | ≤ 20 ms |
+| Playing over Bluetooth | Must be playable after calibration; if not, the game must detect BT and show a warning |
 
-**Kapı:** matristeki cihazların en az 7'sinde kriterler sağlanmadan Faz 4'e
-geçilmez. Sağlanamıyorsa çözüm sırası: (1) DSP buffer ayarı, (2) Native
-Audio benzeri eklenti, (3) FMOD'a geçiş.
+**Gate:** Phase 4 does not start until the criteria are met on at least 7
+of the devices in the matrix. If they cannot be met, the order of fixes is:
+(1) DSP buffer setting, (2) a Native Audio-like plugin, (3) moving to FMOD.
 
-## 4. Katman C — Oynanabilirlik seansı
+## 4. Layer C — Playability session
 
-Sayı değil gözlem üretir. 8–10 kişi, her biri 10 dakika, yanında
-oturularak. **Yardım edilmez, soru sorulmaz, sadece izlenir.**
+Produces observations, not numbers. 8–10 people, 10 minutes each, sitting
+next to them. **No help, no questions, just watching.**
 
-### Faz 0 kapısı (dikey dilim)
+### Phase 0 gate (vertical slice)
 
-Tek soru: eğlenceli mi? Ölçüt: kişi 5 dakika elden bırakmıyor ve en az bir
-kez kendiliğinden "bir daha" diyor. 10 kişiden 6'sı bu davranışı
-göstermiyorsa çekirdek mekanik değişir, Faz 1'e geçilmez.
+One question: is it fun? Criterion: the person does not put it down for 5
+minutes and says "one more" unprompted at least once. If 6 out of 10 people
+do not show this behaviour, the core mechanic changes and Phase 1 does not
+start.
 
-### Faz 2 sonu (meta ile birlikte)
+### End of Phase 2 (with the meta)
 
-| Gözlenecek | Kırmızı bayrak |
+| To observe | Red flag |
 | --- | --- |
-| İlk tap kaç saniyede geldi | > 15 sn → ikon okunmuyor |
-| Tap ikonunu kaç denemede geçti | > 3 → pencere dar veya ikon geç çıkıyor |
-| Yükseltme ekranını kendi açtı mı | Hiç açmadıysa meta görünmüyor |
-| Hangi dalı ilk aldı | Ayakkabı değilse fiyat sıralaması yanlış |
-| Ölünce ne dedi/yaptı | "Haksızlık" tepkisi → üretim veya gecikme sorunu |
-| Ölüm animasyonunu atladı mı | Hepsi atlıyorsa animasyonlar uzun |
+| How many seconds until the first tap | > 15 s → the icon is not read |
+| How many attempts to get past the tap icon | > 3 → the window is narrow or the icon appears late |
+| Did they open the upgrade screen on their own | If never, the meta is not visible |
+| Which branch did they buy first | If not Shoes, the price ordering is wrong |
+| What did they say/do on death | An "unfair" reaction → generation or latency problem |
+| Did they skip the death animation | If everyone skips, the animations are too long |
 
-### Seans sonrası 3 soru (sadece bunlar)
+### 3 questions after the session (only these)
 
-1. Ne yapman gerektiğini nereden anladın?
-2. Öldüğünde neden öldüğünü anladın mı?
-3. Bir daha oynar mıydın? (Cevaba değil, duraksamaya bak.)
+1. How did you figure out what you had to do?
+2. When you died, did you understand why?
+3. Would you play again? (Watch the hesitation, not the answer.)
 
-## 5. Katman D — Kapalı test
+## 5. Layer D — Closed test
 
-Play Console kapalı test kanalı, 12–30 tanıdık, en az 2 hafta.
+Play Console closed testing track, 12–30 acquaintances, at least 2 weeks.
 
-**Not:** 12 test kullanıcısı / 14 gün şartı bu hesapta **geçerli değil** —
-stüdyonun üretim erişimi var. Kapalı test buna rağmen yapılır, çünkü cihaz
-çeşitliliği ve çökme verisi başka türlü toplanamaz.
+**Note:** the 12 testers / 14 days requirement **does not apply** to this
+account — the studio has production access. The closed test is run anyway,
+because device variety and crash data cannot be collected any other way.
 
-| İzlenecek | Kaynak | Eşik |
+| To track | Source | Threshold |
 | --- | --- | --- |
-| Çökmesiz oturum | Crashlytics | ≥ %99,5 |
-| ANR oranı | Play Console vitals | ≤ %0,47 (Play eşiği) |
-| Soğuk açılış süresi | Vitals | ≤ 3 sn orta sınıf cihazda |
-| Aşırı pil kullanımı | Vitals | Uyarı yok |
-| Kayıt bozulması | Destek geri bildirimi | 0 vaka |
-| Ekonomi sapması | `currency_balance` günlük snapshot | Simülasyondan ±%40 içinde |
+| Crash-free sessions | Crashlytics | ≥ 99.5% |
+| ANR rate | Play Console vitals | ≤ 0.47% (Play threshold) |
+| Cold start time | Vitals | ≤ 3 s on a mid-range device |
+| Excessive battery use | Vitals | No warning |
+| Save corruption | Support feedback | 0 cases |
+| Economy drift | Daily `currency_balance` snapshot | Within ±40% of the simulation |
 
-Son satır kritik: gerçek oyuncuların para bakiyesi simülasyondan çok
-saparsa (özellikle yukarı), sink yetersiz demektir — v1.1 beklemeden
-maliyet tabanları güncellenir.
+The last row is critical: if real players' coin balances drift far from the
+simulation (especially upward), the sink is insufficient — cost bases are
+updated without waiting for v1.1.
 
-## 6. Katman E — Ücretli bütçe olmadan ölçüm
+## 6. Layer E — Measurement without a paid budget
 
-**Gerçeği kabul ederek başlamak gerekiyor:** D1'i ±3 puan hassasiyetle
-ölçmek için ~900 install'lık kohort gerekiyor. Organik yeni bir oyun bunu
-haftalarca toplayamayabilir. Yani:
+**We have to start by accepting reality:** measuring D1 with ±3 point
+precision takes a cohort of ~900 installs. A new organic game may not
+collect that for weeks. So:
 
-- 20–30 kişilik kapalı testten çıkan "D1 %40" sayısı **istatistik değildir**,
-  gürültüdür. Karar dayanağı yapılmaz.
-- Retention kapıları (D1 ≥ %35, D7 ≥ %15) geçerliliğini koruyor ama
-  **ölçülebilir hale gelmeleri zaman alacak**. Kapı tarihe değil, örneklem
-  büyüklüğüne bağlanır: kohort 900'e ulaşmadan karar verilmez.
+- A "D1 40%" number from a 20–30 person closed test **is not a statistic**,
+  it is noise. It is not used as grounds for a decision.
+- The retention gates (D1 ≥ 35%, D7 ≥ 15%) remain valid, but **it will take
+  time before they become measurable**. The gate is tied to sample size,
+  not to a date: no decision before the cohort reaches 900.
 
-### Bütçesiz strateji
+### No-budget strategy
 
-1. **Önce örneklem gerektirmeyen şeyleri düzelt.** Öğretici tamamlama
-   oranı, ilk tap süresi, çökme, ses gecikmesi — bunlar 30 kişilik
-   örneklemde bile okunur, çünkü aranan etki büyük (ya %90 tamamlıyor ya
-   %50).
-2. **Üretime çık, biriktir.** v1.0 üretim kanalında yayınlanır, organik
-   install birikir. Play Console retention verisi kendiliğinden toplanır.
-3. **Organik hızlandırıcılar (para değil emek):** TikTok/Reels'e oyunun
-   kendi klipleri (ölüm derlemesi, Perfect serisi), stüdyonun mevcut
-   oyunlarında çapraz tanıtım, yilkgames.com'da oyun kartı, Reddit/oyun
-   toplulukları.
-4. **Kohort eşiği dolunca kapıyı oku.** 900 install'a ulaşıldığında D1/D7
-   değerlendirilir ve v1.1 kararı verilir.
-5. **Bütçe fikri değişirse:** 300–500 USD'lik tek seferlik TikTok kampanyası
-   bu bekleme süresini haftalardan günlere indirir. Şu an planda yok, ama
-   kapı kriterleri aynı kalır.
+1. **First fix the things that need no sample.** Tutorial completion rate,
+   time to first tap, crashes, audio latency — these can be read even from
+   a 30 person sample, because the effect being looked for is large (either
+   90% complete it or 50%).
+2. **Ship to production, accumulate.** v1.0 is released on the production
+   track, organic installs accumulate. Play Console retention data is
+   collected automatically.
+3. **Organic accelerators (effort, not money):** the game's own clips on
+   TikTok/Reels (death compilations, Perfect streaks), cross-promotion in
+   the studio's existing games, a game card on yilkgames.com, Reddit/gaming
+   communities.
+4. **Read the gate once the cohort threshold is reached.** At 900 installs
+   D1/D7 are evaluated and the v1.1 decision is made.
+5. **If the budget stance changes:** a one-time 300–500 USD TikTok campaign
+   cuts this wait from weeks to days. It is not in the plan right now, but
+   the gate criteria stay the same.
 
-### Örneklem büyüklüğü kılavuzu
+### Sample size guide
 
-| Ölçülen | Beklenen etki | Gereken örneklem |
+| Measured | Expected effect | Required sample |
 | --- | --- | --- |
-| Öğretici tamamlama (%90 mı %50 mi) | Çok büyük | 30 |
-| İlk tap süresi ortalaması | Büyük | 50 |
-| Çökme oranı | — | 100+ oturum |
-| D1 (±10 puan) | Kaba | ~100 |
-| D1 (±3 puan) | Karar için | ~900 |
-| İki sürüm A/B farkı (3 puan) | İnce | 2.000+/kol — bütçesiz ulaşılamaz, A/B yapılmayacak |
+| Tutorial completion (90% or 50%) | Very large | 30 |
+| Average time to first tap | Large | 50 |
+| Crash rate | — | 100+ sessions |
+| D1 (±10 points) | Rough | ~100 |
+| D1 (±3 points) | For decisions | ~900 |
+| A/B difference between two versions (3 points) | Fine | 2,000+/arm — unreachable without budget, no A/B testing |
 
-Son satır bir karar: **v1.0'da A/B testi yapılmayacak.** Yeterli trafik
-olmadan A/B, yanlış kararın istatistik kılığına girmesidir.
+The last row is a decision: **no A/B testing in v1.0.** A/B without enough
+traffic is a wrong decision dressed up as statistics.
 
-## 7. Sürüm öncesi kontrol listesi
+## 7. Pre-release checklist
 
-Her üretim sürümünden önce elle geçilecek:
+To be gone through manually before every production release:
 
-- [ ] Katman A testleri yeşil
-- [ ] Ses gecikmesi matrisi en az 3 cihazda tekrar edildi (regresyon)
-- [ ] Yeni kurulum akışı baştan sona oynandı (kayıt silinmiş cihazda)
-- [ ] Eski kayıtla açılış denendi (bir önceki sürümün kaydı)
-- [ ] Uçak modunda açılış: reklam yok, oyun çalışıyor, çökme yok
-- [ ] Ödüllü reklam iptal edilince ödül verilmiyor, kapatılınca oyun donmuyor
-- [ ] IAP satın alma + iade senaryosu
-- [ ] UMP onam ekranı AB/Türkiye için çıkıyor, reddedince oyun çalışıyor
-- [ ] Sessiz modda oynanabiliyor (görsel vuruş halkası + titreşim)
-- [ ] Çağrı geldiğinde / uygulama arka plana atıldığında müzik ve senkron
-      doğru toparlanıyor
-- [ ] Düşük pil / termal kısma altında 10 dakikalık oturum: senkron kaymıyor
+- [ ] Layer A tests green
+- [ ] Audio latency matrix repeated on at least 3 devices (regression)
+- [ ] Fresh install flow played end to end (on a device with the save wiped)
+- [ ] Launch with an old save tested (the previous version's save)
+- [ ] Launch in airplane mode: no ads, game runs, no crash
+- [ ] Cancelling a rewarded ad grants no reward, closing it does not freeze
+      the game
+- [ ] IAP purchase + refund scenario
+- [ ] UMP consent screen appears for the EU/Turkey, the game runs after
+      declining
+- [ ] Playable in silent mode (visual beat ring + haptics)
+- [ ] Music and sync recover correctly on an incoming call / when the app
+      is sent to the background
+- [ ] 10 minute session under low battery / thermal throttling: sync does
+      not drift
 
-Son iki madde ritim oyununa özel ve en çok atlanan yerlerdir.
+The last two items are specific to rhythm games and are the most often
+skipped.
 
-## 8. Kapılar özeti
+## 8. Gates summary
 
-| Kapı | Kriter | Geçilmezse |
+| Gate | Criterion | If not passed |
 | --- | --- | --- |
-| Faz 0 | 10 kişiden ≥ 6'sı 5 dk bırakmıyor | Çekirdek mekanik değişir |
-| Faz 1 | Üretim testleri %100, ilk gecikme matrisi geçti | Motor/ses yolu revize |
-| Faz 2 | Ekonomi simülasyonu 4/4 OK, oynanabilirlik kırmızı bayrak yok | Ekonomi veya öğretici revize |
-| Faz 3 | Sürüm öncesi kontrol listesi tamam | Yayın yok |
-| Faz 4 | Çökmesiz ≥ %99,5 · öğretici tamamlama ≥ %90 · gecikme matrisi 7/8 | v1.1'e geçilmez |
-| Faz 4 (geç) | Kohort ≥ 900 iken D1 ≥ %35 **ve** D7 ≥ %15 | D1 düşükse çekirdek, D7 düşükse ekonomi revize |
+| Phase 0 | ≥ 6 out of 10 people do not put it down for 5 min | Core mechanic changes |
+| Phase 1 | Generation tests 100%, first latency matrix passed | Engine/audio path revised |
+| Phase 2 | Economy simulation 4/4 OK, no playability red flags | Economy or tutorial revised |
+| Phase 3 | Pre-release checklist complete | No release |
+| Phase 4 | Crash-free ≥ 99.5% · tutorial completion ≥ 90% · latency matrix 7/8 | No move to v1.1 |
+| Phase 4 (late) | With cohort ≥ 900: D1 ≥ 35% **and** D7 ≥ 15% | Low D1 → core revised, low D7 → economy revised |
