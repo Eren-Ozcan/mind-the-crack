@@ -1,198 +1,207 @@
-# Mind the Crack — Üretim Planı ve Yol Haritası
+# Mind the Crack — Production Plan and Roadmap
 
-Tek kişilik geliştirme (Eren + Claude) varsayımıyla. Süreler takvim
-haftası, tam zamanlı değil.
+Assumes one-person development (Eren + Claude). Durations are calendar
+weeks, not full-time.
 
-## 0. Motor kararı
+## 0. Engine decision
 
-**Öneri: Unity.**
+**Recommendation: Unity.**
 
-Gerekçe: oyunun tek kritik teknik gereksinimi ses–girdi senkronizasyonu.
-Unity'de bunun standart çözümü olgun ve belgeli (`AudioSettings.dspTime`,
-`AudioSource.PlayScheduled`, DSP buffer ayarı). Stüdyonun diğer oyunları
-Capacitor/web (Çengel Bulmaca, Reefy) ve Godot (Little Grand Hotel) — ikisi
-de bu oyun için yanlış:
+Rationale: the game's single critical technical requirement is audio–input
+synchronisation. Unity's standard solution for this is mature and
+documented (`AudioSettings.dspTime`, `AudioSource.PlayScheduled`, DSP
+buffer setting). The studio's other games are Capacitor/web (Cengel
+Bulmaca, Reefy) and Godot (Little Grand Hotel) — both are wrong for this
+game:
 
-- **Capacitor/web:** Android WebView'da WebAudio gecikmesi cihaza göre çok
-  değişken ve kontrol edilemez. Ritim oyunu için elenir.
-- **Godot:** mobilde ses gecikmesi kontrolü Unity kadar olgun değil, ritim
-  oyunu örneği ve topluluk bilgisi az.
+- **Capacitor/web:** WebAudio latency in Android WebView varies widely by
+  device and cannot be controlled. Ruled out for a rhythm game.
+- **Godot:** audio latency control on mobile is not as mature as Unity's,
+  and there are few rhythm game examples and little community knowledge.
 
-Bedeli: stüdyoda Unity pipeline'ı yok — AdMob, Firebase, Play Console
-entegrasyonları ilk kez Unity tarafında kurulacak. Bu, Faz 3'e yaklaşık 1
-hafta ek yük demek. Buna değer, çünkü yanlış motorla senkronizasyon sorunu
-çözülemez.
+The cost: the studio has no Unity pipeline — AdMob, Firebase and Play
+Console integrations will be set up on the Unity side for the first time.
+That means roughly 1 extra week in Phase 3. It is worth it, because a sync
+problem cannot be solved with the wrong engine.
 
-## 1. Fazlar
+## 1. Phases
 
-### Faz 0 — Dikey dilim (1–2 hafta) · **kapı: eğlenceli mi?**
+### Phase 0 — Vertical slice (1–2 weeks) · **gate: is it fun?**
 
-Amaç: para, grafik, menü, reklam yok. Sadece "vuruşa basarak taşa inmek"
-hissi.
+Goal: no coins, art, menus or ads. Only the feeling of "landing on a slab
+by pressing on the beat".
 
-- [x] Unity 6.1 (6000.1.17f1) projesi, `dspTime` tabanlı `Conductor`
-      (vuruş sayacı, commit gecikmesi, sapma hesabı).
-- [x] Gri kutu kaldırım — ama sabit taş yerine **ters üretim algoritması
-      baştan yazıldı** (`SidewalkGenerator`). En büyük algoritma riski
-      olduğu için Faz 1'den öne alındı.
-- [x] Karakter = kapsül; adım = vuruştan vuruşa lerp, zıplamada yay.
-- [x] Girdi: tap = uzun adım, swipe = zıplama, `StepConfig`
-      ScriptableObject'inde ayarlanabilir zamanlama penceresi.
-- [x] İniş değerlendirmesi: Perfect / İyi / Tökezleme / Ölüm.
-- [x] Debug HUD: sapma ms, mesafe, skor, çarpan, seri, adım türü.
-- [x] Prosedürel metronom (`ClickTrack`) — ses varlığı beklenmedi.
-- [x] 3 seçeneğin iniş noktasını gösteren önizleme işaretleri.
-- [x] Üretim doğrulama testi (10.000 seed) — `Mind the Crack > Validate
-      Generator` menüsü veya `-executeMethod`.
-- [ ] URP kurulumu (CLI ile açılan proje Built-in pipeline ile geldi;
-      materyaller şimdilik Standard shader'a düşüyor).
-- [ ] Telefonda test (APK) ve 10 kişilik oynanabilirlik seansı.
+- [x] Unity 6.1 (6000.1.17f1) project, `dspTime`-based `Conductor`
+      (beat counter, commit delay, offset calculation).
+- [x] Greybox sidewalk — but instead of fixed slabs, **the reverse
+      generation algorithm was written up front** (`SidewalkGenerator`).
+      Pulled forward from Phase 1 because it is the biggest algorithmic
+      risk.
+- [x] Character = capsule; step = lerp from beat to beat, arc on jumps.
+- [x] Input: tap = long step, swipe = jump, timing window tunable in the
+      `StepConfig` ScriptableObject.
+- [x] Landing evaluation: Perfect / Good / Stumble / Death.
+- [x] Debug HUD: offset ms, distance, score, multiplier, streak, step kind.
+- [x] Procedural metronome (`ClickTrack`) — no waiting on audio assets.
+- [x] Preview markers showing the landing point of all 3 options.
+- [x] Generation validation test (10,000 seeds) — `Mind the Crack >
+      Validate Generator` menu or `-executeMethod`.
+- [ ] URP setup (the project opened via CLI came with the Built-in
+      pipeline; materials fall back to the Standard shader for now).
+- [ ] On-phone test (APK) and a 10 person playability session.
 
-**Kapı kriteri:** Eren + en az 3 kişi telefonda oynar, 5 dakika elden
-bırakmaz. Bırakıyorsa çekirdek mekanik düzeltilir; Faz 1'e geçilmez.
+**Gate criterion:** Eren + at least 3 people play on a phone and do not
+put it down for 5 minutes. If they do, the core mechanic is fixed; Phase 1
+does not start.
 
-### Faz 1 — Çekirdek sistemler (2–3 hafta)
+### Phase 1 — Core systems (2–3 weeks)
 
-- [ ] Ters üretim algoritması (tasarım dokümanı §3.2) + birim testleri:
-      üretilen her segment çözülebilir olmalı, 10.000 seed ile otomatik test.
-- [ ] 3 zemin türü, zorluk eğrisi, BPM rampası ve 5 BPM loop seti geçişi.
-- [ ] Müzik katman sistemi (seri → stem açma/kapama, bar sınırında fade).
-- [ ] Kalibrasyon ekranı + offset kaydı.
-- [ ] 2 engel (su birikintisi, köpek kakası).
-- [ ] Ölüm akışı + 4 batıl inanç animasyonu (placeholder animasyonla başla).
-- [ ] Skor, çarpan, run sonu ekranı.
+- [ ] Reverse generation algorithm (design document §3.2) + unit tests:
+      every generated segment must be solvable, automated test with 10,000
+      seeds.
+- [ ] 3 ground types, difficulty curve, BPM ramp and switching between the
+      5 BPM loop sets.
+- [ ] Music layer system (streak → stem on/off, fade on bar boundaries).
+- [ ] Calibration screen + offset storage.
+- [ ] 2 obstacles (puddle, dog poop).
+- [ ] Death flow + 4 superstition animations (start with placeholder
+      animations).
+- [ ] Score, multiplier, end-of-run screen.
 
-### Faz 2 — Meta, ekonomi ve kabuk (4–5 hafta) **[GENİŞLEDİ]**
+### Phase 2 — Meta, economy and shell (4–5 weeks) **[EXPANDED]**
 
-Hooked Inc tarzı yükseltme + prestij yapısı bu faza eklendi. Tasarım
-dokümanı §7 ve §8.
+A Hooked Inc style upgrade + prestige structure was added to this phase.
+Design document §7 and §8.
 
-**2a — Ekonomi modeli · ✅ TAMAMLANDI (22 Eyl 2026)**
-- [x] Simülasyon: `tools/economy_sim.py`, dokümantasyon: `docs/economy.md`.
-- [x] Dört hedef kontrolü de OK: 1. gün 3 yükseltme · ilk taşınma 8. gün ·
-      7. günde hiçbir dal 10 değil · sink kurumuyor.
-- [x] Maliyet formülü `taban × 1,90^şehir × 1,60^seviye`, dal tabanları
+**2a — Economy model · ✅ DONE (22 Sep 2026)**
+- [x] Simulation: `tools/economy_sim.py`, documentation: `docs/economy.md`.
+- [x] All four target checks OK: 3 upgrades on day 1 · first move on day 8 ·
+      no branch at 10 on day 7 · the sink does not dry up.
+- [x] Cost formula `base × 1.90^city × 1.60^level`, branch bases
       50/70/90/120.
-- [ ] Sayıları Unity ScriptableObject'e aktar. **Kodda sabit sayı
-      yazılmaz** — `economy.md` tek kaynak.
+- [ ] Export the numbers to a Unity ScriptableObject. **No numbers are
+      hardcoded** — `economy.md` is the single source.
 
-**2b — Sistemler · 2 hafta**
-- [ ] Kalıcı kayıt (local JSON, `PlayerPrefs` değil) — şema baştan çift
-      para birimi + prestij çarpanı alanlarını içerir.
-- [ ] Yükseltme ağacı: 4 dal × 10 seviye (Ayakkabı, Şans, Dayanıklılık,
-      Mahalle).
-- [ ] Yükseltmelerin run'a uygulanması — **sadece izin verilen alanlar**
-      (tasarım §8.1 tablosu). Zamanlama penceresine dokunan kod yazılmaz.
-- [ ] Çevrimdışı gelir: tavan 2–4 saat, Mahalle dalıyla uzar. Cihaz saati
-      geri alınırsa gelir verilmez.
-- [ ] Prestij altyapısı: şehir kimliği, kalıcı çarpan, taşınma koşulu
-      kontrolü (v1.0'da tek şehir, taşınma UI'si v1.1'de).
-- [ ] Kozmetik sistemi: 8 ayakkabı/kıyafet, para ile açılır.
-- [ ] Günlük 3 görev, gece yarısı sıfırlama (cihaz saati manipülasyonuna
-      karşı: en son görülen tarih geri giderse sıfırlama yok).
-- [ ] Mesafe kilometre taşları ve ödülleri.
+**2b — Systems · 2 weeks**
+- [ ] Persistent save (local JSON, not `PlayerPrefs`) — the schema includes
+      dual currency + prestige multiplier fields from the start.
+- [ ] Upgrade tree: 4 branches × 10 levels (Shoes, Luck, Endurance,
+      Neighborhood).
+- [ ] Applying upgrades to the run — **only the allowed fields** (design
+      §8.1 table). No code is written that touches the timing window.
+- [ ] Offline income: 2–4 hour cap, extended by the Neighborhood branch.
+      No income if the device clock is moved back.
+- [ ] Prestige infrastructure: city ID, permanent multiplier, move
+      condition check (single city in v1.0, moving UI in v1.1).
+- [ ] Cosmetics system: 8 shoes/outfits, unlocked with coins.
+- [ ] 3 daily quests, midnight reset (against device clock manipulation:
+      no reset if the last seen date goes backwards).
+- [ ] Distance milestones and their rewards.
 
-**2c — Kabuk · 1–2 hafta**
-- [ ] Yükseltme ekranı (4 dal, seviye göstergesi, maliyet, "yetmiyor"
-      durumu), çevrimdışı gelir karşılama ekranı.
-- [ ] Ana menü, ayarlar (ses, titreşim, offset), gizlilik linkleri.
-- [ ] Yerelleştirme altyapısı: EN + TR.
+**2c — Shell · 1–2 weeks**
+- [ ] Upgrade screen (4 branches, level indicator, cost, "not enough"
+      state), offline income welcome screen.
+- [ ] Main menu, settings (sound, haptics, offset), privacy links.
+- [ ] Localisation infrastructure: EN + TR.
 
-### Faz 3 — Yayın altyapısı (1–2 hafta)
+### Phase 3 — Release infrastructure (1–2 weeks)
 
-- [ ] AdMob (Unity plugin) + UMP onam akışı. Yerleşimler
-      `ADS_POLICY.md`'ye göre.
-- [ ] Firebase Analytics: run_start, run_end (mesafe, ölüm sebebi, max
-      çarpan), ad_shown, ad_rewarded, iap_purchase, calibration_offset,
-      **upgrade_purchased (dal, seviye, o ana kadarki toplam para),
-      offline_income_claimed, currency_balance (günlük snapshot)**.
-- [ ] IAP: reklamsız + başlangıç paketi (Google Play Billing).
-- [ ] Play Console listing (stüdyo hesabı `yilkgamesstudio@gmail.com`),
-      Data Safety formu, gizlilik/hesap silme adresleri (stüdyo geneli
-      adresler — oyuna özel sayfa açılmaz).
-- [ ] Firebase API key kısıtlaması — proje kurulur kurulmaz, ertelenmez.
-- [ ] Görsel varlıklar `docs/store-assets-originals/` (gitignore'lu) +
-      `Eren-Ozcan/pictures` reposunda `pictures/mind-the-crack/`.
+- [ ] AdMob (Unity plugin) + UMP consent flow. Placements per
+      `ADS_POLICY.md`.
+- [ ] Firebase Analytics: run_start, run_end (distance, cause of death, max
+      multiplier), ad_shown, ad_rewarded, iap_purchase, calibration_offset,
+      **upgrade_purchased (branch, level, total coins so far),
+      offline_income_claimed, currency_balance (daily snapshot)**.
+- [ ] IAP: no ads + starter pack (Google Play Billing).
+- [ ] Play Console listing (studio account `yilkgamesstudio@gmail.com`),
+      Data Safety form, privacy/account deletion URLs (studio-wide URLs —
+      no game-specific page).
+- [ ] Firebase API key restriction — as soon as the project is created, not
+      postponed.
+- [ ] Visual assets in `docs/store-assets-originals/` (gitignored) +
+      `pictures/mind-the-crack/` in the `Eren-Ozcan/pictures` repo.
 
-**Not:** 12 test kullanıcısı / 14 gün şartı bu oyun için **geçerli değil** —
-stüdyo hesabının üretim erişimi zaten var (Çengel Bulmaca ve Reefy üzerinden
-onaylandı). Yine de kapalı test yapılacak, çünkü cihaz çeşitliliğinde ses
-gecikmesi ancak böyle görülür.
+**Note:** the 12 testers / 14 days requirement **does not apply** to this
+game — the studio account already has production access (confirmed through
+Cengel Bulmaca and Reefy). A closed test will still be run, because that is
+the only way to see audio latency across device variety.
 
-### Faz 4 — Test ve ölçüm (3–4 hafta)
+### Phase 4 — Testing and measurement (3–4 weeks)
 
-- [ ] Kapalı test: en az 10 farklı Android cihaz, odak ses gecikmesi
-      (cihaz matrisi ve protokol: `test-plan.md` §3).
-- [ ] Ölçüm kohortu: ≥ 900 install, **organik** — ücretli kampanya yok.
-      Kapı tarihe değil örneklem büyüklüğüne bağlı; 900'e ulaşılana kadar
-      retention kararı verilmez (`test-plan.md` §6).
-- [ ] Okunacak metrikler: D1, D7, oturum süresi, run/oturum, ölüm mesafesi
-      histogramı, kalibrasyon offset dağılımı, ödüllü izleme oranı,
-      **yükseltme ağacında takılma seviyesi, para bakiyesi dağılımı
-      (biriken para = sink yetersiz), çevrimdışı gelir dönüş oranı**.
-- [ ] Kapı: D1 ≥ %35 **ve** D7 ≥ %15. Altındaysa v1.1'e geçilmez — D1
-      düşükse çekirdek, D7 düşükse ekonomi eğrisi revize edilir.
+- [ ] Closed test: at least 10 different Android devices, focus on audio
+      latency (device matrix and protocol: `test-plan.md` §3).
+- [ ] Measurement cohort: ≥ 900 installs, **organic** — no paid campaign.
+      The gate depends on sample size, not a date; no retention decision
+      until 900 is reached (`test-plan.md` §6).
+- [ ] Metrics to read: D1, D7, session length, runs/session, death distance
+      histogram, calibration offset distribution, rewarded watch rate,
+      **level where players get stuck in the upgrade tree, coin balance
+      distribution (piling coins = insufficient sink), offline income
+      return rate**.
+- [ ] Gate: D1 ≥ 35% **and** D7 ≥ 15%. Below that, no move to v1.1 — if D1
+      is low the core is revised, if D7 is low the economy curve is.
 
-### Faz 5 — v1.1 (kapı geçilirse, 4–5 hafta)
+### Phase 5 — v1.1 (if the gate is passed, 4–5 weeks)
 
-İstanbul + ilk gerçek taşınma (prestij UI'si), yonca, günlük meydan okuma
-(yükseltmeler normalize), paylaşım klibi, 2 karakter, 2 zemin, 2 engel,
-para paketi IAP.
+Istanbul + the first real move (prestige UI), clover, daily challenge
+(upgrades normalised), share clip, 2 characters, 2 grounds, 2 obstacles,
+coin pack IAP.
 
-## 2. Toplam takvim
+## 2. Overall schedule
 
-| Faz | Süre | Kümülatif |
+| Phase | Duration | Cumulative |
 | --- | --- | --- |
-| 0 — dikey dilim | 1–2 hafta | 2 |
-| 1 — çekirdek | 2–3 hafta | 5 |
-| 2 — meta, ekonomi, kabuk | 4–5 hafta | 10 |
-| 3 — yayın altyapısı | 1–2 hafta | 12 |
-| 4 — test | 3–4 hafta | 16 |
+| 0 — vertical slice | 1–2 weeks | 2 |
+| 1 — core | 2–3 weeks | 5 |
+| 2 — meta, economy, shell | 4–5 weeks | 10 |
+| 3 — release infrastructure | 1–2 weeks | 12 |
+| 4 — testing | 3–4 weeks | 16 |
 
-v1.0 yayını için gerçekçi aralık: **4,5–5 ay.**
+Realistic range for the v1.0 release: **4.5–5 months.**
 
-Yükseltme + prestij yapısı takvime ~3 hafta ekledi. Karşılığında beklenen:
-D7 %12 → %15+, ARPDAU 0,05–0,08 → 0,12–0,20 USD. Pazar verisine göre
-hybrid casual, hypercasual'ın ~5 katı ARPDAU üretiyor — bu 3 hafta,
-oyunun ölçülebilir ürün olup olmamasının farkı.
+The upgrade + prestige structure added ~3 weeks to the schedule. Expected in
+return: D7 12% → 15%+, ARPDAU 0.05–0.08 → 0.12–0.20 USD. According to the
+market data, hybrid casual produces ~5× the ARPDAU of hypercasual — these 3
+weeks are the difference between the game being a measurable product or
+not.
 
-## 3. Varlık listesi (v1.0)
+## 3. Asset list (v1.0)
 
-| Kategori | Adet | Not |
+| Category | Count | Note |
 | --- | --- | --- |
-| Karakter modeli | 1 + 8 kozmetik varyant | Low-poly, tek rig — **Blender'da kendi üretimi** |
-| Animasyon | yürüme, uzun adım, zıplama, tökezleme, 4 ölüm | 8 klip |
-| Zemin | 3 tür × 3 varyasyon | Tile bazlı, tekrar eden |
-| Engel | 2 | Su birikintisi, köpek kakası |
-| Müzik | 5 BPM × 4 stem | 20 loop, orijinal. Kaynak kararı ertelendi (ücretsiz/CC0 araştırması, olmazsa AI); Faz 0–2 placeholder metronom |
-| SFX | ~15 | Adım, ding, seri kırılma, ölümler, UI |
-| UI | menü, HUD, run sonu, mağaza, **yükseltme ağacı**, **çevrimdışı gelir**, ayarlar, kalibrasyon | 8 ekran |
-| Yükseltme ikonu | 4 dal × 10 seviye durumu | Dal başına 1 ikon + seviye çerçevesi yeterli |
-| Store görseli | ikon, feature graphic, 6 ekran görüntüsü, tanıtım videosu | pictures reposuna. **ASO/mağaza planı oyun bitince yapılacak**; Faz 3'te sadece zorunlu alanlar |
+| Character model | 1 + 8 cosmetic variants | Low-poly, single rig — **made in-house in Blender** |
+| Animation | walk, long step, jump, stumble, 4 deaths | 8 clips |
+| Ground | 3 types × 3 variations | Tile based, repeating |
+| Obstacle | 2 | Puddle, dog poop |
+| Music | 5 BPM × 4 stems | 20 loops, original. Sourcing decision deferred (free/CC0 research, AI if that fails); placeholder metronome in Phases 0–2 |
+| SFX | ~15 | Step, ding, streak break, deaths, UI |
+| UI | menu, HUD, end of run, store, **upgrade tree**, **offline income**, settings, calibration | 8 screens |
+| Upgrade icon | 4 branches × 10 level states | 1 icon per branch + a level frame is enough |
+| Store visuals | icon, feature graphic, 6 screenshots, promo video | To the pictures repo. **The ASO/store plan will be done once the game is finished**; only mandatory fields in Phase 3 |
 
-## 4. Verilen kararlar (22 Eylül 2026)
+## 4. Decisions made (22 September 2026)
 
-| Konu | Karar | Sonucu |
+| Topic | Decision | Consequence |
 | --- | --- | --- |
-| Görsel üretim | **Blender** — karakter, animasyon, zemin, engeller kendi içinde | Asset store/freelance bütçesi yok; low-poly stil zaten bu üretime uygun |
-| Müzik | **En sona bırakıldı.** Sırası gelince önce ücretsiz/CC0 stem araştırması, olmazsa AI üretim | Faz 0–2 placeholder metronomla ilerler |
-| Test bütçesi | **Yok** — ücretli UA kampanyası yapılmayacak | Ölçüm stratejisi değişti, bkz. `test-plan.md` §6; v1.0'da A/B testi yapılmayacak |
-| iOS | **Sonra** | v1.0 yalnızca Android |
-| Mağaza/ASO planı | **Oyun bittikten sonra** | Faz 3'te sadece zorunlu listing alanları doldurulur |
-| Ekonomi modeli | **Kuruldu ve doğrulandı** | `docs/economy.md` + `tools/economy_sim.py`, 4/4 hedef kontrolü OK |
-| İlk oturum akışı | **Tanımlandı** | `docs/onboarding.md` — kalibrasyon ilk açılıştan çıkarıldı |
-| Test planı | **Yazıldı** | `docs/test-plan.md` — 5 katman, cihaz matrisi, kapılar |
+| Visual production | **Blender** — character, animation, ground, obstacles in-house | No asset store/freelance budget; the low-poly style suits this production anyway |
+| Music | **Left for last.** When its turn comes, free/CC0 stem research first, AI generation if that fails | Phases 0–2 proceed with a placeholder metronome |
+| Test budget | **None** — no paid UA campaign | The measurement strategy changed, see `test-plan.md` §6; no A/B testing in v1.0 |
+| iOS | **Later** | v1.0 is Android only |
+| Store/ASO plan | **After the game is finished** | Only the mandatory listing fields are filled in Phase 3 |
+| Economy model | **Built and validated** | `docs/economy.md` + `tools/economy_sim.py`, 4/4 target checks OK |
+| First session flow | **Defined** | `docs/onboarding.md` — calibration removed from first launch |
+| Test plan | **Written** | `docs/test-plan.md` — 5 layers, device matrix, gates |
 
-Açık kalan tek şey: **müzik kaynağı**, ve o bilinçli olarak Faz 2 sonuna
-kadar ertelendi.
+The only thing left open: **the music source**, and that was deliberately
+deferred to the end of Phase 2.
 
-## 5. Bu depoya dair kurallar
+## 5. Rules for this repository
 
-- Store/pazarlama görselleri **bu repoya commit edilmez**. Yerel:
-  `docs/store-assets-originals/` (gitignore'lu). Kalıcı: private
-  `Eren-Ozcan/pictures` reposunda `pictures/mind-the-crack/`.
-- Google/Play/AdMob/Firebase paneline girmeden önce aktif hesap doğrulanır;
-  beklenen hesap `yilkgamesstudio@gmail.com`. Adresler ve tuzaklar:
-  `C:\Projects\pictures\STUDIO.md`.
-- Reklam yerleşimi eklemeden önce `C:\Projects\pictures\ADS_POLICY.md`
-  okunur.
+- Store/marketing visuals are **never committed to this repo**. Local:
+  `docs/store-assets-originals/` (gitignored). Permanent: private
+  `Eren-Ozcan/pictures` repo under `pictures/mind-the-crack/`.
+- Before opening the Google/Play/AdMob/Firebase consoles, the active account
+  is verified; the expected account is `yilkgamesstudio@gmail.com`. URLs
+  and pitfalls: `C:\Projects\pictures\STUDIO.md`.
+- Before adding an ad placement, `C:\Projects\pictures\ADS_POLICY.md` is
+  read.
