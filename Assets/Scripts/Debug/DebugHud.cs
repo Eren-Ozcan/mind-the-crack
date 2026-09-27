@@ -33,13 +33,13 @@ namespace MindTheCrack.DebugTools
             GUILayout.BeginArea(new Rect(pad, pad, Screen.width - pad * 2, Screen.height - pad * 2));
 
             GUILayout.Label($"{Run.Distance:0.0} m", _big);
-            GUILayout.Label($"skor {Run.Score}   x{Run.Multiplier:0.0}   seri {Run.PerfectStreak}", _small);
+            GUILayout.Label($"score {Run.Score}   x{Run.Multiplier:0.0}   streak {Run.PerfectStreak}", _small);
 
             double ms = Run.LastDeviation * 1000.0;
             string dev = Run.LastInputIgnored
-                ? $"{(ms < 0 ? "COK ERKEN" : "COK GEC")} ({ms:+0;-0} ms)"
-                : $"sapma {ms:+0;-0} ms";
-            GUILayout.Label($"{dev}   adim {Run.LastKind}   bpm {Conductor.Bpm:0}", _small);
+                ? $"{(ms < 0 ? "TOO EARLY" : "TOO LATE")} ({ms:+0;-0} ms)"
+                : $"offset {ms:+0;-0} ms";
+            GUILayout.Label($"{dev}   step {Run.LastKind}   bpm {Conductor.Bpm:0}", _small);
             GUILayout.Label($"offset {Conductor.CalibrationOffset * 1000.0:0} ms", _small);
 
             GUILayout.FlexibleSpace();
@@ -47,22 +47,22 @@ namespace MindTheCrack.DebugTools
             var (text, colour) = Run.LastResult switch
             {
                 StepResult.Perfect => ("PERFECT", new Color(0.3f, 1f, 0.4f)),
-                StepResult.Good => ("iyi", new Color(0.85f, 0.85f, 0.85f)),
+                StepResult.Good => ("good", new Color(0.85f, 0.85f, 0.85f)),
                 StepResult.Stumble => ("MISS", new Color(1f, 0.55f, 0.2f)),
-                _ => ("OLDUN", new Color(1f, 0.3f, 0.3f)),
+                _ => ("DEAD", new Color(1f, 0.3f, 0.3f)),
             };
             var prev = GUI.color;
             GUI.color = colour;
             GUILayout.Label(text, _result);
             GUI.color = prev;
 
-            GUILayout.Label("dokunma = 2 blok   tap = 3 blok   yukari swipe = 5 blok", _small);
+            GUILayout.Label("no touch = 2 blocks   tap = 3 blocks   swipe up = 5 blocks", _small);
 
             GUILayout.EndArea();
 
             // Out of the way in the corner: in the middle of the screen it ate
             // taps meant for the beat, which reads as a dead spot.
-            if (GUI.Button(new Rect(Screen.width - 150f - pad, pad, 150f, 44f), "Yeniden"))
+            if (GUI.Button(new Rect(Screen.width - 150f - pad, pad, 150f, 44f), "Restart"))
                 Run.StartRun(Random.Range(1, 999999));
         }
 
